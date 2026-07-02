@@ -1,0 +1,485 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+//////////////////// ENUMS ////////////////////
+
+enum Role {
+  SUPER_ADMIN
+  SCHOOL_ADMIN
+  TEACHER
+  STUDENT
+  PARENT
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  LATE
+}
+
+enum ExamType {
+  UNIT_TEST
+  MID_TERM
+  FINAL
+}
+
+enum FeeStatus {
+  PENDING
+  PAID
+  OVERDUE
+}
+
+enum NoticeAudience {
+  ALL
+  STUDENTS
+  TEACHERS
+  PARENTS
+}
+
+enum NotificationType {
+  GENERAL
+  ACADEMIC
+  EXAM
+  HOLIDAY
+  EVENT
+  FEES
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum NoticeStatus {
+  DRAFT
+  PUBLISHED
+  SCHEDULED
+}
+
+//////////////////// CORE ////////////////////
+
+model User {
+  id       String  @id @default(uuid())
+  email    String  @unique
+  password String
+  role     Role
+  isActive Boolean @default(true)
+
+  firstName String
+  lastName  String
+  phone     String?
+
+  schoolId String?
+  school   School? @relation(fields: [schoolId], references: [id])
+
+  refreshToken String?
+  resetToken   String?
+  resetTokenExpires DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  student Student?
+  teacher Teacher?
+  parent  Parent?
+
+  audits AuditLog[]
+
+  uploadedDocuments Document[] @relation("UploadedBy")
+
+  notifications    Notification[]
+}
+
+
+model Notification {
+  id        String   @id @default(uuid())
+  title     String
+  message   String
+  type      String   @default("ANNOUNCEMENT") // ANNOUNCEMENT, FEE, EXAM, SYSTEM
+  isRead    Boolean  @default(false)
+  
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  
+  schoolId  String?
+  
+  createdAt DateTime @default(now())
+
+  @@index([schoolId])
+}
+
+model School {
+  id      String @id @default(uuid())
+  name    String
+  code    String @unique
+  address String
+  phone   String
+  email   String
+
+  users    User[]
+  students Student[]
+  teachers Teacher[]
+  parents  Parent[]
+
+  classes  Class[]
+  sections Section[]
+  subjects Subject[]
+  notices  Notice[]
+  vehicles Vehicle[]
+  documents Document[]
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+}
+
+//////////////////// USERS ////////////////////
+
+model Student {
+  id     String @id @default(uuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id])
+
+  rollNumber String
+  gender     Gender
+  dob        DateTime
+
+  schoolId String
+  school   School @relation(fields: [schoolId], references: [id])
+
+  classId   String
+  sectionId String?
+
+  class   Class   @relation(fields: [classId], references: [id])
+  section Section? @relation(fields: [sectionId], references: [id])
+
+  attendance Attendance[]
+  exams      ExamResult[]
+  fees       Fee[]
+  parents    Parent[]
+  documents  Document[]
+
+  createdAt DateTime @default(now())
+
+  @@index([schoolId])
+  @@index([classId])
+}
+
+model Teacher {
+  id     String @id @default(uuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id])
+
+  qualification String
+  experience    Int
+
+  schoolId String
+  school   School @relation(fields: [schoolId], references: [id])
+
+  subjects   Subject[]
+  timetables Timetable[]
+  homeworks  Homework[]
+
+  createdAt DateTime @default(now())
+}
+
+model Parent {
+  id     String @id @default(uuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id])
+
+  fatherName     String?
+  motherName     String?
+  address        String?
+  secondaryPhone String?
+
+  schoolId String
+  school   School @relation(fields: [schoolId], references: [id])
+
+  students Student[]
+
+  createdAt DateTime @default(now())
+}
+
+//////////////////// ACADEMICS ////////////////////
+
+model Class {
+  id       String @id @default(uuid())
+  name     String
+  schoolId String
+  school   School @relation(fields: [schoolId], references: [id])
+
+  sections      Section[]
+  students      Student[]
+  exams         Exam[]
+  timetables    Timetable[]
+  homeworks     Homework[]
+  announcements Announcement[]
+
+  createdAt DateTime @default(now())
+}
+
+model Section {
+  id   String @id @default(uuid())
+  name String
+
+  classId String
+  class   Class  @relation(fields: [classId], references: [id])
+
+  students Student[]
+
+  createdAt DateTime @default(now())
+  School    School?  @relation(fields: [schoolId], references: [id])
+  schoolId  String?
+}
+
+model Subject {
+  id   String @id @default(uuid())
+  name String
+  code String
+
+  schoolId String
+  school   School @relation(fields: [schoolId], references: [id])
+
+  teacherId String?
+  teacher   Teacher? @relation(fields: [teacherId], references: [id])
+
+  timetables Timetable[]
+  homeworks  Homework[]
+
+  createdAt DateTime @default(now())
+}
+
+//////////////////// TIMETABLE ////////////////////
+
+enum DayOfWeek {
+  MONDAY
+  TUESDAY
+  WEDNESDAY
+  THURSDAY
+  FRIDAY
+  SATURDAY
+  SUNDAY
+}
+
+model Timetable {
+  id        String    @id @default(uuid())
+  day       DayOfWeek
+  startTime String // Format: HH:mm (e.g., "09:00")
+  endTime   String // Format: HH:mm (e.g., "10:00")
+
+  classId String
+  class   Class  @relation(fields: [classId], references: [id])
+
+  subjectId String
+  subject   Subject @relation(fields: [subjectId], references: [id])
+
+  teacherId String
+  teacher   Teacher @relation(fields: [teacherId], references: [id])
+
+  room String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+//////////////////// HOMEWORK ////////////////////
+
+model Homework {
+  id          String  @id @default(uuid())
+  title       String
+  description String?
+
+  classId String
+  class   Class  @relation(fields: [classId], references: [id])
+
+  subjectId String
+  subject   Subject @relation(fields: [subjectId], references: [id])
+
+  teacherId String
+  teacher   Teacher @relation(fields: [teacherId], references: [id])
+
+  dueDate DateTime
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Attendance {
+  id     String           @id @default(uuid())
+  date   DateTime
+  status AttendanceStatus
+
+  studentId String
+  student   Student @relation(fields: [studentId], references: [id])
+
+  createdAt DateTime @default(now())
+}
+
+model Exam {
+  id           String   @id @default(uuid())
+  name         String
+  type         ExamType
+  date         DateTime
+  totalMarks   Int
+  passingMarks Int
+
+  classId String
+  class   Class  @relation(fields: [classId], references: [id])
+
+  results ExamResult[]
+
+  createdAt DateTime @default(now())
+}
+
+model ExamResult {
+  id    String @id @default(uuid())
+  marks Float
+
+  examId String
+  exam   Exam   @relation(fields: [examId], references: [id])
+
+  studentId String
+  student   Student @relation(fields: [studentId], references: [id])
+}
+
+model Fee {
+  id      String    @id @default(uuid())
+  amount  Float
+  status  FeeStatus
+  dueDate DateTime
+
+  studentId String
+  student   Student @relation(fields: [studentId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Notice {
+  id       String         @id @default(uuid())
+  title    String
+  content  String // Rich text content (formerly message)
+  audience NoticeAudience @default(ALL)
+  status   NoticeStatus   @default(PUBLISHED)
+  
+  publishDate DateTime?   @default(now())
+  attachments Json?       // Store multiple attachment metadata as JSON
+
+  schoolId String
+  school   School @relation(fields: [schoolId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Announcement {
+  id        String           @id @default(uuid())
+  title     String
+  content   String           @db.Text
+  type      NotificationType @default(GENERAL)
+  priority  Priority         @default(LOW)
+  
+  allSchool Boolean @default(false)
+  classId   String?
+  class     Class?  @relation(fields: [classId], references: [id])
+  
+  attachment String?
+  expiresAt  DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  authorId   String
+  authorName String
+}
+
+model Book {
+  id        String  @id @default(uuid())
+  title     String
+  author    String
+  isbn      String?
+  publisher String?
+  quantity  Int     @default(1)
+  category  String?
+}
+
+model Vehicle {
+  id       String @id @default(uuid())
+  number   String
+  driver   String
+  model    String?
+  phone    String?
+  capacity Int?
+
+  schoolId String
+  school   School @relation(fields: [schoolId], references: [id])
+}
+
+model AuditLog {
+  id     String  @id @default(uuid())
+  action String
+  ip     String?
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+
+  createdAt DateTime @default(now())
+}
+
+model SystemLog {
+  id      String @id @default(uuid())
+  level   String
+  message String
+
+  createdAt DateTime @default(now())
+}
+
+//////////////////// PLANS ////////////////////
+
+model Plan {
+  id          String  @id @default(uuid())
+  name        String
+  description String?
+  price       Float
+  duration    Int? // Duration in months
+  isActive    Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Document {
+  id           String @id @default(uuid())
+  fileName     String
+  fileType     String
+  s3Key        String? 
+  s3Url        String?
+  fileSize     Int?
+  documentType String // ID_PROOF, PREVIOUS_REPORT, TRANSCRIPT, OTHER
+  description  String?
+
+  studentId String
+  student   Student @relation(fields: [studentId], references: [id])
+
+  uploadedBy     String
+  uploadedByUser User   @relation("UploadedBy", fields: [uploadedBy], references: [id])
+
+  schoolId String
+  school   School @relation(fields: [schoolId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
