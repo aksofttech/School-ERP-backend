@@ -13,6 +13,7 @@ import { Response } from 'express';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
+import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 
 // Cookie options for HTTP-Only, Secure, Cross-Site cookie
 const COOKIE_OPTIONS = {
@@ -75,6 +76,7 @@ export class AuthController {
   }
 
   @Get('profile')
+  @UseGuards(JwtAuthGuard)
   async getProfile(@Request() req) {
     return this.authService.getProfile(req.user);
   }
