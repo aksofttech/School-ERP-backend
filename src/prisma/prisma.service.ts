@@ -36,6 +36,39 @@ export class PrismaService
         this.logger.debug(`Duration: ${e.duration}ms`);
       });
     }
+
+    // Middleware: auto-reconnect on stale Neon connections (kind: Closed)
+    // Neon's serverless Postgres idles out after ~5 min of inactivity.
+    // This middleware detects the closed-connection error and retries once.
+    (this as any).$use(async (params: any, next: any) => {
+      try {
+        return await next(params);
+      } catch (error: any) {
+        const isClosedConnection =
+          error?.message?.includes('kind: Closed') ||
+          error?.message?.includes('Error { kind: Closed') ||
+          error?.code === 'P1001' ||  // Connection refused
+          error?.code === 'P1017';    // Server closed the connection
+
+        if (isClosedConnection) {
+          this.logger.warn(
+            '[Prisma] Detected closed/stale connection. Reconnecting...',
+          );
+          try {
+            await this.$disconnect();
+            await this.$connect();
+            this.logger.log('[Prisma] Reconnected successfully. Retrying query...');
+            return await next(params);
+          } catch (reconnectError: any) {
+            this.logger.error(
+              `[Prisma] Reconnection failed: ${reconnectError.message}`,
+            );
+            throw reconnectError;
+          }
+        }
+        throw error;
+      }
+    });
   }
 
   async onModuleInit() {
