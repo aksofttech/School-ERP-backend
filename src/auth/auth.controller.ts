@@ -5,11 +5,22 @@ import {
   UseGuards,
   Get,
   Request,
+  Res,
+  HttpCode,
+  HttpStatus,
 } from '@nestjs/common';
+import { Response } from 'express';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
-import { RefreshTokenDto } from './dto/refresh-token.dto';
+
+// Cookie options for HTTP-Only, Secure, Cross-Site cookie
+const COOKIE_OPTIONS = {
+  httpOnly: true,
+  secure: true,
+  sameSite: 'none' as const,
+  maxAge: 24 * 60 * 60 * 1000, // 24 hours
+};
 
 @Controller('auth')
 export class AuthController {
@@ -20,14 +31,47 @@ export class AuthController {
     return this.authService.register(registerDto);
   }
 
+  /**
+   * Login: Validates credentials, sets the JWT as an HTTP-Only cookie,
+   * and returns only the user profile (no raw token in body).
+   */
   @Post('login')
-  async login(@Body() loginDto: LoginDto) {
-    return this.authService.login(loginDto);
+  @HttpCode(HttpStatus.OK)
+  async login(
+    @Body() loginDto: LoginDto,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const result = await this.authService.login(loginDto);
+
+    // Set the access token in an HTTP-Only, Secure cookie
+    res.cookie('token', result.access_token, COOKIE_OPTIONS);
+
+    // Return only user data — never expose raw tokens in the response body
+    return {
+      message: 'Login successful',
+      user: result.user,
+    };
+  }
+
+  /**
+   * Logout: Clears the HTTP-Only cookie.
+   */
+  @Post('logout')
+  @HttpCode(HttpStatus.OK)
+  async logout(@Res({ passthrough: true }) res: Response) {
+    res.clearCookie('token', {
+      httpOnly: true,
+      secure: true,
+      sameSite: 'none',
+    });
+    return { message: 'Logged out successfully' };
   }
 
   @Post('refresh')
-  async refresh(@Body() refreshTokenDto: RefreshTokenDto) {
-    return this.authService.refreshToken(refreshTokenDto.refreshToken);
+  async refresh(@Request() req) {
+    // With cookie-based auth, refresh can read the cookie directly
+    const token = req.cookies?.['token'];
+    return this.authService.refreshToken(token);
   }
 
   @Get('profile')
@@ -51,7 +95,6 @@ export class AuthController {
   }
 
   @Post('change-password')
-  @UseGuards(UseGuards) // Should be JwtAuthGuard ideally, but keeping simple for now or need to import it
   async changePassword(@Body() body: any) {
     return this.authService.changePassword(body);
   }

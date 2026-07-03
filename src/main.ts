@@ -4,12 +4,17 @@ import { ValidationPipe, INestApplication } from '@nestjs/common';
 import { AppModule } from './app.module';
 import { join } from 'path';
 import * as express from 'express';
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const cookieParser = require('cookie-parser');
 
 let cachedApp: INestApplication;
 
 async function bootstrap(): Promise<INestApplication> {
   if (!cachedApp) {
     const app = await NestFactory.create(AppModule);
+
+    // Enable cookie-parser for HTTP-Only cookie authentication
+    app.use(cookieParser());
 
     app.useGlobalPipes(
       new ValidationPipe({
@@ -31,7 +36,8 @@ async function bootstrap(): Promise<INestApplication> {
     app.enableCors({
       origin: allowedOrigins,
       methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
-      credentials: true,
+      allowedHeaders: 'Content-Type, Authorization',
+      credentials: true, // Required for cross-domain cookie transmission
     });
 
     // Serve static files from the 'uploads' directory
