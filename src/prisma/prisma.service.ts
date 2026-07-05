@@ -37,38 +37,62 @@ export class PrismaService
       });
     }
 
-    // Middleware: auto-reconnect on stale Neon connections (kind: Closed)
+    // Middleware/Extension: auto-reconnect on stale Neon connections (kind: Closed)
     // Neon's serverless Postgres idles out after ~5 min of inactivity.
-    // This middleware detects the closed-connection error and retries once.
-    (this as any).$use(async (params: any, next: any) => {
-      try {
-        return await next(params);
-      } catch (error: any) {
-        const isClosedConnection =
-          error?.message?.includes('kind: Closed') ||
-          error?.message?.includes('Error { kind: Closed') ||
-          error?.code === 'P1001' ||  // Connection refused
-          error?.code === 'P1017';    // Server closed the connection
+    // This extension detects the closed-connection error and retries once.
+    const extendedClient = this.$extends({
+      query: {
+        $allModels: {
+          async $allOperations({ model, operation, args, query }) {
+            try {
+              return await query(args);
+            } catch (error: any) {
+              const isClosedConnection =
+                error?.message?.includes('kind: Closed') ||
+                error?.message?.includes('Error { kind: Closed') ||
+                error?.code === 'P1001' || // Connection refused
+                error?.code === 'P1017'; // Server closed the connection
 
-        if (isClosedConnection) {
-          this.logger.warn(
-            '[Prisma] Detected closed/stale connection. Reconnecting...',
-          );
-          try {
-            await this.$disconnect();
-            await this.$connect();
-            this.logger.log('[Prisma] Reconnected successfully. Retrying query...');
-            return await next(params);
-          } catch (reconnectError: any) {
-            this.logger.error(
-              `[Prisma] Reconnection failed: ${reconnectError.message}`,
-            );
-            throw reconnectError;
-          }
-        }
-        throw error;
-      }
+              if (isClosedConnection) {
+                this.logger.warn(
+                  '[Prisma] Detected closed/stale connection. Reconnecting...',
+                );
+                try {
+                  await this.$disconnect();
+                  await this.$connect();
+                  this.logger.log('[Prisma] Reconnected successfully. Retrying query...');
+                  return await query(args);
+                } catch (reconnectError: any) {
+                  this.logger.error(
+                    `[Prisma] Reconnection failed: ${reconnectError.message}`,
+                  );
+                  throw reconnectError;
+                }
+              }
+              throw error;
+            }
+          },
+        },
+      },
     });
+
+    return new Proxy(this, {
+      get(target, prop, receiver) {
+        if (
+          prop === 'onModuleInit' ||
+          prop === 'onModuleDestroy' ||
+          prop === 'logger' ||
+          prop === 'configService' ||
+          prop === 'constructor'
+        ) {
+          const value = Reflect.get(target, prop, receiver);
+          return typeof value === 'function' ? value.bind(target) : value;
+        }
+
+        const value = Reflect.get(extendedClient, prop);
+        return typeof value === 'function' ? value.bind(extendedClient) : value;
+      },
+    }) as any;
   }
 
   async onModuleInit() {
