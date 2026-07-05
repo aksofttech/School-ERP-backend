@@ -29,8 +29,7 @@ async function bootstrap(): Promise<INestApplication> {
       : [
           'http://localhost:3001',
           'http://localhost:3000',
-          'https://yugsoft-utog.vercel.app',
-          'https://yugsoft.vercel.app',
+          'https://school-erp-frontend-eta.vercel.app',
         ];
 
     app.enableCors({
