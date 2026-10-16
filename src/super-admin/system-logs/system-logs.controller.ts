@@ -1,4 +1,4 @@
-import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Param, Query, UseGuards } from '@nestjs/common';
 import { SystemLogsService } from './system-logs.service';
 import { PaginationDto } from '../../common/utils/pagination.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
@@ -14,6 +14,16 @@ export class SystemLogsController {
   @Get()
   findAll(@Query() paginationDto: PaginationDto) {
     return this.systemLogsService.findAll(paginationDto);
+  }
+
+  @Get('health')
+  getHealth() {
+    return this.systemLogsService.getHealth();
+  }
+
+  @Post('run-diagnostics')
+  runDiagnostics() {
+    return this.systemLogsService.runDiagnostics();
   }
 
   @Get(':id')

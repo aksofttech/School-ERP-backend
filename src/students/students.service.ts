@@ -134,7 +134,9 @@ export class StudentsService {
     // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    console.log(`[StudentsService] Creating student: ${firstName} ${lastName} (${email}) in school ${currentUser.schoolId}`);
+    console.log(
+      `[StudentsService] Creating student: ${firstName} ${lastName} (${email}) in school ${currentUser.schoolId}`,
+    );
 
     // Use transaction to create user and student atomically
     return await this.prisma.$transaction(async (tx) => {
@@ -955,7 +957,7 @@ export class StudentsService {
       await tx.fee.deleteMany({ where: { studentId: id } });
       await tx.examResult.deleteMany({ where: { studentId: id } });
       await tx.document.deleteMany({ where: { studentId: id } });
-      
+
       // 2. Delete dependent user records
       await tx.notification.deleteMany({ where: { userId: student.userId } });
       await tx.auditLog.deleteMany({ where: { userId: student.userId } });

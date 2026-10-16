@@ -18,7 +18,7 @@ import { RolesGuard, Roles } from '../common/guards/roles.guard';
 import { CurrentUser } from '../common/decorators/user.decorator';
 import { Role } from '@prisma/client';
 
-@Controller('users')
+@Controller(['users', 'super-admin/users'])
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(Role.SUPER_ADMIN, Role.SCHOOL_ADMIN)
 export class UsersController {

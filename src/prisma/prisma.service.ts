@@ -36,7 +36,6 @@ export class PrismaService
         this.logger.debug(`Duration: ${e.duration}ms`);
       });
     }
-
   }
 
   async onModuleInit() {

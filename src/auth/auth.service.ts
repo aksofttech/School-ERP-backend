@@ -1,4 +1,9 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import {
+  Injectable,
+  UnauthorizedException,
+  BadRequestException,
+  NotFoundException,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { LoginDto } from './dto/login.dto';
@@ -154,15 +159,72 @@ export class AuthService {
 
   async getProfile(user: any) {
     // User is attached to request by JwtStrategy
+    const userId = user.userId || user.id || user.sub;
     const userProfile = await this.prisma.user.findUnique({
-      where: { id: user.userId }, // JwtStrategy usually maps 'sub' to 'userId'
+      where: { id: userId },
+      include: {
+        school: {
+          select: {
+            id: true,
+            name: true,
+            code: true,
+            address: true,
+            phone: true,
+            email: true,
+          },
+        },
+      },
     });
 
     if (userProfile) {
-      const { password, ...result } = userProfile;
+      const {
+        password,
+        refreshToken,
+        resetToken,
+        resetTokenExpires,
+        ...result
+      } = userProfile;
       return result;
     }
     return null;
+  }
+
+  async updateProfile(
+    userId: string,
+    data: { firstName?: string; lastName?: string; phone?: string },
+  ) {
+    if (!userId) {
+      throw new BadRequestException('User ID is required');
+    }
+
+    const updatePayload: any = {};
+    if (data.firstName !== undefined)
+      updatePayload.firstName = data.firstName.trim();
+    if (data.lastName !== undefined)
+      updatePayload.lastName = data.lastName.trim();
+    if (data.phone !== undefined)
+      updatePayload.phone = data.phone ? data.phone.trim() : null;
+
+    const updatedUser = await this.prisma.user.update({
+      where: { id: userId },
+      data: updatePayload,
+      include: {
+        school: {
+          select: {
+            id: true,
+            name: true,
+            code: true,
+            address: true,
+            phone: true,
+            email: true,
+          },
+        },
+      },
+    });
+
+    const { password, refreshToken, resetToken, resetTokenExpires, ...result } =
+      updatedUser;
+    return result;
   }
 
   async forgotPassword(email: string) {
@@ -239,9 +301,58 @@ export class AuthService {
     return { valid: isValid };
   }
 
-  async changePassword(changePasswordDto: any) {
-    // Mock implementation
-    console.log(`[Mock] Change password for user`);
+  async changePassword(userId: string, changePasswordDto: any) {
+    const currentPass =
+      changePasswordDto.oldPassword || changePasswordDto.currentPassword;
+    const newPass = changePasswordDto.newPassword;
+
+    if (!currentPass || !newPass) {
+      throw new BadRequestException(
+        'Current password and new password are required',
+      );
+    }
+
+    if (newPass.length < 6) {
+      throw new BadRequestException(
+        'New password must be at least 6 characters long',
+      );
+    }
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const isMatch = await bcrypt.compare(currentPass, user.password);
+    if (!isMatch) {
+      throw new BadRequestException(
+        'Incorrect current password. Please verify and try again.',
+      );
+    }
+
+    const hashedPassword = await bcrypt.hash(newPass, 10);
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        password: hashedPassword,
+      },
+    });
+
+    try {
+      await this.prisma.auditLog.create({
+        data: {
+          action: 'PASSWORD_CHANGED',
+          userId: userId,
+          ip: '127.0.0.1',
+        },
+      });
+    } catch {
+      // Ignore if audit log table structure differs
+    }
+
     return { message: 'Password changed successfully' };
   }
 }

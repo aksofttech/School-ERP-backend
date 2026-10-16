@@ -4,6 +4,7 @@ import {
   Body,
   UseGuards,
   Get,
+  Patch,
   Request,
   Res,
   HttpCode,
@@ -81,6 +82,12 @@ export class AuthController {
     return this.authService.getProfile(req.user);
   }
 
+  @Patch('profile')
+  @UseGuards(JwtAuthGuard)
+  async updateProfile(@Request() req, @Body() body: any) {
+    return this.authService.updateProfile(req.user.userId, body);
+  }
+
   @Post('forgot-password')
   async forgotPassword(@Body() body: { email: string }) {
     return this.authService.forgotPassword(body.email);
@@ -97,7 +104,8 @@ export class AuthController {
   }
 
   @Post('change-password')
-  async changePassword(@Body() body: any) {
-    return this.authService.changePassword(body);
+  @UseGuards(JwtAuthGuard)
+  async changePassword(@Request() req, @Body() body: any) {
+    return this.authService.changePassword(req.user.userId, body);
   }
 }

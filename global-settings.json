@@ -1,0 +1,50 @@
+{
+  "general": {
+    "platformName": "Vikas ERP",
+    "tagline": "Next-Gen Multi-School Operating System",
+    "supportEmail": "support@vikaserp.com",
+    "supportPhone": "+91 98290 00001",
+    "currency": "INR",
+    "currencySymbol": "₹",
+    "timezone": "Asia/Kolkata",
+    "academicYear": "2026-2027",
+    "dateFormat": "DD/MM/YYYY"
+  },
+  "onboarding": {
+    "allowSelfRegistration": true,
+    "requireAdminApproval": true,
+    "defaultTrialDays": 30,
+    "maxTrialStudents": 150,
+    "defaultPlan": "Starter Trial",
+    "subdomainFormat": "{code}.vikaserp.com"
+  },
+  "security": {
+    "require2FA": false,
+    "sessionTimeoutMinutes": 60,
+    "maxLoginAttempts": 5,
+    "enforceStrongPassword": true,
+    "passwordExpiryDays": 90,
+    "allowMultipleLogins": false
+  },
+  "smtp": {
+    "provider": "SendGrid",
+    "host": "smtp.sendgrid.net",
+    "port": 587,
+    "secure": false,
+    "senderEmail": "notifications@vikaserp.com",
+    "senderName": "Vikas ERP Notifications",
+    "username": "apikey"
+  },
+  "notifications": {
+    "emailEnabled": true,
+    "smsEnabled": true,
+    "smsProvider": "Fast2SMS India",
+    "whatsappEnabled": true
+  },
+  "maintenance": {
+    "maintenanceMode": false,
+    "maintenanceMessage": "Scheduled system upgrades are currently in progress. All school records remain fully secure.",
+    "emergencyAlert": "",
+    "lastBackup": "2026-10-16T12:00:00.000Z"
+  }
+}

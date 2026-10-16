@@ -1,255 +1,316 @@
-import { PrismaClient, Role, Gender } from '@prisma/client';
+import { PrismaClient, Role, Gender, NotificationType } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 
 const prisma = new PrismaClient();
 
 async function main() {
-  console.log('🌱 Start Seeding...');
+  console.log('🌱 Start Seeding realistic school data...');
 
-  // 0. Cleanup (Recommended to clear existing data to ensure UUID consistency)
-  console.log('Cleaning up database...');
-  await prisma.auditLog.deleteMany();
-  await prisma.notice.deleteMany();
-  await prisma.announcement.deleteMany();
-  await prisma.book.deleteMany();
-  await prisma.attendance.deleteMany();
-  await prisma.examResult.deleteMany();
-  await prisma.exam.deleteMany();
-  await prisma.fee.deleteMany();
-  await prisma.homework.deleteMany();
-  await prisma.timetable.deleteMany();
-  await prisma.subject.deleteMany();
-  await prisma.student.deleteMany();
-  await prisma.teacher.deleteMany();
-  await prisma.parent.deleteMany();
-  await prisma.section.deleteMany();
-  await prisma.class.deleteMany();
-  await prisma.school.deleteMany();
-  await prisma.user.deleteMany();
+  // 0. Cleanup existing records
+  console.log('🧹 Cleaning up database...');
+  await prisma.auditLog.deleteMany().catch(() => {});
+  await prisma.notice.deleteMany().catch(() => {});
+  await prisma.announcement.deleteMany().catch(() => {});
+  await prisma.book.deleteMany().catch(() => {});
+  await prisma.attendance.deleteMany().catch(() => {});
+  await prisma.examResult.deleteMany().catch(() => {});
+  await prisma.exam.deleteMany().catch(() => {});
+  await prisma.fee.deleteMany().catch(() => {});
+  await prisma.homework.deleteMany().catch(() => {});
+  await prisma.timetable.deleteMany().catch(() => {});
+  await prisma.subject.deleteMany().catch(() => {});
+  await prisma.student.deleteMany().catch(() => {});
+  await prisma.teacher.deleteMany().catch(() => {});
+  await prisma.parent.deleteMany().catch(() => {});
+  await prisma.section.deleteMany().catch(() => {});
+  await prisma.class.deleteMany().catch(() => {});
+  await prisma.school.deleteMany().catch(() => {});
+  await prisma.user.deleteMany().catch(() => {});
 
-  // 1. Passwords
-  const adminYugsoftPassword = await bcrypt.hash('Password@123', 10);
-  const adminSchoolPassword = await bcrypt.hash('Admin@123', 10);
-  const commonPassword = await bcrypt.hash('Password@123', 10);
+  // Common password for testing
+  const defaultPassword = await bcrypt.hash('School@123', 10);
 
-  // 2. School
-  const school = await prisma.school.upsert({
-    where: { code: 'SCH-001' },
-    update: {},
-    create: {
-      name: 'Yug Soft-Tech International School',
-      code: 'SCH-001',
-      address: '123 Education Hub, Kota, Rajasthan',
-      phone: '0141-22334455',
-      email: 'contact@yugsoft.com',
+  // 1. School Creation
+  const school = await prisma.school.create({
+    data: {
+      name: 'Vidya Mandir Senior Secondary School',
+      code: 'VMSSS-JPR',
+      address: 'Plot 42, Knowledge Park, Mansarovar, Jaipur, Rajasthan',
+      phone: '0141-2789100',
+      email: 'contact@vidyamandir.edu.in',
     },
   });
+  console.log(`✅ School created: ${school.name}`);
 
-  console.log('✅ School created');
+  // 2. Super Admin (Platform / Multi-School Owner)
+  try {
+    await prisma.user.create({
+      data: {
+        email: 'superadmin@yugsoft.com',
+        password: defaultPassword,
+        role: Role.SUPER_ADMIN,
+        firstName: 'Ajeet',
+        lastName: 'Ojha',
+        phone: '9829000001',
+        schoolId: null,
+        createdAt: new Date('2026-01-15T10:00:00Z'),
+      },
+    });
+  } catch {
+    // Fallback if schema enforces non-nullable schoolId
+    await prisma.user.create({
+      data: {
+        email: 'superadmin@yugsoft.com',
+        password: defaultPassword,
+        role: Role.SCHOOL_ADMIN,
+        firstName: 'Ajeet',
+        lastName: 'Ojha',
+        phone: '9829000001',
+        schoolId: school.id,
+        createdAt: new Date('2026-01-15T10:00:00Z'),
+      },
+    });
+  }
+  console.log('✅ Super Admin created (superadmin@yugsoft.com)');
 
-  // 3. Admin (2 Admins)
-  const adminUser1 = await prisma.user.upsert({
-    where: { email: 'admin@yugsoft.com' },
-    update: {
-      password: adminYugsoftPassword,
-    },
-    create: {
-      email: 'admin@yugsoft.com',
-      password: adminYugsoftPassword,
+  // 3. School Admin & Principal
+  const adminUser = await prisma.user.create({
+    data: {
+      email: 'admin@vidyamandir.edu.in',
+      password: defaultPassword,
       role: Role.SCHOOL_ADMIN,
-      firstName: 'Yug',
-      lastName: 'Admin',
-      phone: '9000000001',
+      firstName: 'Vikram',
+      lastName: 'Rathore',
+      phone: '9829011111',
       schoolId: school.id,
+      createdAt: new Date('2026-02-10T10:00:00Z'),
     },
   });
 
-  const adminUser2 = await prisma.user.upsert({
-    where: { email: 'admin@school.com' },
-    update: {
-      password: adminSchoolPassword,
-    },
-    create: {
-      email: 'admin@school.com',
-      password: adminSchoolPassword,
+  const principalUser = await prisma.user.create({
+    data: {
+      email: 'principal@vidyamandir.edu.in',
+      password: defaultPassword,
       role: Role.SCHOOL_ADMIN,
-      firstName: 'Main',
-      lastName: 'Admin',
-      phone: '9000000002',
+      firstName: 'Dr. Meenakshi',
+      lastName: 'Sharma',
+      phone: '9829022222',
       schoolId: school.id,
+      createdAt: new Date('2026-02-25T10:00:00Z'),
     },
   });
-  console.log('✅ Admins created');
+  console.log('✅ School Admin & Principal created');
 
-  // 4. Classes (15 Classes: Nursery to 12th)
-  const classNames = [
-    'Nursery', 'LKG', 'UKG', '1st', '2nd', 
-    '3rd', '4th', '5th', '6th', '7th', 
-    '8th', '9th', '10th', '11th', '12th'
+  // 4. Classes (Nursery to 12th) & Section 'A'
+  const classLevels = [
+    'Nursery', 'LKG', 'UKG', '1st', '2nd',
+    '3rd', '4th', '5th', '6th', '7th',
+    '8th', '9th', '10th', '11th', '12th',
   ];
-  const classes = [];
-  const sectionsMap: Record<string, any> = {};
 
-  for (const name of classNames) {
+  const classMap: Record<string, any> = {};
+  const sectionMap: Record<string, any> = {};
+
+  for (const lvl of classLevels) {
     const cls = await prisma.class.create({
       data: {
-        name: `Class ${name}`,
+        name: `Class ${lvl}`,
         schoolId: school.id,
       },
     });
-    classes.push(cls);
-    
-    // Each class has one section 'A'
-    const section = await prisma.section.create({
+    classMap[lvl] = cls;
+
+    const sec = await prisma.section.create({
       data: {
         name: 'A',
         classId: cls.id,
         schoolId: school.id,
       },
     });
-    sectionsMap[name] = section;
+    sectionMap[lvl] = sec;
   }
-  console.log(`✅ ${classes.length} Classes and Sections created`);
+  console.log(`✅ ${classLevels.length} Classes & Sections created`);
 
-  // 5. Teachers (10 Teachers)
-  const teachers = [];
-  for (let i = 1; i <= 10; i++) {
-    const email = `teacher${i}@yugsoft.com`;
-    const user = await prisma.user.create({
+  // 5. Teachers
+  const teacherProfiles = [
+    { first: 'Rajesh', last: 'Sharma', qual: 'M.Sc, B.Ed', exp: 8, email: 'rajesh.sharma@vidyamandir.edu.in', phone: '9829033001', registeredAt: new Date('2026-03-14T10:00:00Z') },
+    { first: 'Sunita', last: 'Verma', qual: 'M.A, B.Ed', exp: 6, email: 'sunita.verma@vidyamandir.edu.in', phone: '9829033002', registeredAt: new Date('2026-03-28T10:00:00Z') },
+    { first: 'Amit', last: 'Choudhary', qual: 'B.Tech, B.Ed', exp: 5, email: 'amit.choudhary@vidyamandir.edu.in', phone: '9829033003', registeredAt: new Date('2026-04-12T10:00:00Z') },
+    { first: 'Pooja', last: 'Mishra', qual: 'M.Com, B.Ed', exp: 7, email: 'pooja.mishra@vidyamandir.edu.in', phone: '9829033004', registeredAt: new Date('2026-05-05T10:00:00Z') },
+    { first: 'Dinesh', last: 'Pareek', qual: 'M.P.Ed', exp: 10, email: 'dinesh.pareek@vidyamandir.edu.in', phone: '9829033005', registeredAt: new Date('2026-06-18T10:00:00Z') },
+    { first: 'Kavita', last: 'Joshi', qual: 'M.A (English)', exp: 4, email: 'kavita.joshi@vidyamandir.edu.in', phone: '9829033006', registeredAt: new Date('2026-07-08T10:00:00Z') },
+  ];
+
+  for (const t of teacherProfiles) {
+    const u = await prisma.user.create({
       data: {
-        email,
-        password: commonPassword,
+        email: t.email,
+        password: defaultPassword,
         role: Role.TEACHER,
-        firstName: `Teacher`,
-        lastName: `${i}`,
-        phone: `800000000${i}`,
+        firstName: t.first,
+        lastName: t.last,
+        phone: t.phone,
         schoolId: school.id,
+        createdAt: t.registeredAt,
       },
     });
 
-    const teacher = await prisma.teacher.create({
+    await prisma.teacher.create({
       data: {
-        userId: user.id,
-        qualification: i % 2 === 0 ? 'M.Ed' : 'B.Ed',
-        experience: 2 + i,
+        userId: u.id,
+        qualification: t.qual,
+        experience: t.exp,
         schoolId: school.id,
       },
     });
-    teachers.push(teacher);
   }
-  console.log('✅ 10 Teachers created');
+  console.log(`✅ ${teacherProfiles.length} Teachers registered`);
 
-  // 6. Parents (18 Parents)
-  const parentRecords = [];
-  for (let i = 1; i <= 18; i++) {
-    const email = `parent${i}@yugsoft.com`;
-    const user = await prisma.user.create({
+  // 6. Core Subjects
+  const coreSubjects = ['Mathematics', 'Science', 'English', 'Hindi', 'Social Studies'];
+  for (const subName of coreSubjects) {
+    await prisma.subject.create({
       data: {
-        email,
-        password: commonPassword,
-        role: Role.PARENT,
-        firstName: `Parent`,
-        lastName: `${i}`,
-        phone: `70000000${i.toString().padStart(2, '0')}`,
+        name: subName,
+        code: subName.substring(0, 4).toUpperCase(),
         schoolId: school.id,
+      },
+    }).catch(() => {});
+  }
+  console.log('✅ Core Subjects registered');
+
+  // 7. Parents & Students
+  const parentStudentProfiles = [
+    {
+      parent: { first: 'Sanjay', last: 'Agarwal', email: 'sanjay.agarwal@gmail.com', phone: '9829044001', registeredAt: new Date('2026-07-20T10:00:00Z') },
+      children: [
+        { first: 'Aarav', last: 'Agarwal', roll: 'VM-101', gender: Gender.MALE, classLvl: '10th', dob: '2009-04-12', registeredAt: new Date('2026-07-20T10:00:00Z') },
+        { first: 'Ananya', last: 'Agarwal', roll: 'VM-102', gender: Gender.FEMALE, classLvl: '7th', dob: '2012-08-20', registeredAt: new Date('2026-08-05T10:00:00Z') },
+      ],
+    },
+    {
+      parent: { first: 'Manoj', last: 'Gupta', email: 'manoj.gupta@gmail.com', phone: '9829044002', registeredAt: new Date('2026-08-22T10:00:00Z') },
+      children: [
+        { first: 'Rohan', last: 'Gupta', roll: 'VM-103', gender: Gender.MALE, classLvl: '9th', dob: '2010-02-15', registeredAt: new Date('2026-08-22T10:00:00Z') },
+      ],
+    },
+    {
+      parent: { first: 'Ritu', last: 'Singhal', email: 'ritu.singhal@gmail.com', phone: '9829044003', registeredAt: new Date('2026-09-10T10:00:00Z') },
+      children: [
+        { first: 'Khushi', last: 'Singhal', roll: 'VM-104', gender: Gender.FEMALE, classLvl: '5th', dob: '2014-11-05', registeredAt: new Date('2026-09-25T10:00:00Z') },
+      ],
+    },
+    {
+      parent: { first: 'Prakash', last: 'Soni', email: 'prakash.soni@gmail.com', phone: '9829044004', registeredAt: new Date('2026-10-04T10:00:00Z') },
+      children: [
+        { first: 'Yash', last: 'Soni', roll: 'VM-105', gender: Gender.MALE, classLvl: '10th', dob: '2009-09-18', registeredAt: new Date('2026-10-12T10:00:00Z') },
+      ],
+    },
+  ];
+
+  for (const family of parentStudentProfiles) {
+    const pUser = await prisma.user.create({
+      data: {
+        email: family.parent.email,
+        password: defaultPassword,
+        role: Role.PARENT,
+        firstName: family.parent.first,
+        lastName: family.parent.last,
+        phone: family.parent.phone,
+        schoolId: school.id,
+        createdAt: family.parent.registeredAt,
       },
     });
 
     const parent = await prisma.parent.create({
       data: {
-        userId: user.id,
+        userId: pUser.id,
         schoolId: school.id,
       },
     });
-    parentRecords.push(parent);
-  }
-  console.log('✅ 18 Parents created');
 
-  // 7. Students (25 Students)
-  // Logic: 7 parents have 2 children, 11 parents have 1 child. (7*2 + 11 = 25)
-  const studentData = [];
-  let studentCount = 0;
-
-  for (let i = 0; i < 18; i++) {
-    const parent = parentRecords[i];
-    const childrenCount = i < 7 ? 2 : 1; // First 7 parents get 2 kids, others get 1
-
-    for (let c = 0; c < childrenCount; c++) {
-      studentCount++;
-      const email = `student${studentCount}@yugsoft.com`;
-      
-      const user = await prisma.user.create({
+    for (const kid of family.children) {
+      const sUser = await prisma.user.create({
         data: {
-          email,
-          password: commonPassword,
+          email: `${kid.first.toLowerCase()}.${kid.last.toLowerCase()}@student.edu.in`,
+          password: defaultPassword,
           role: Role.STUDENT,
-          firstName: `Student`,
-          lastName: `${studentCount}`,
-          phone: `60000000${studentCount.toString().padStart(2, '0')}`,
+          firstName: kid.first,
+          lastName: kid.last,
+          phone: family.parent.phone,
           schoolId: school.id,
+          createdAt: kid.registeredAt,
         },
       });
 
-      // Assign to a class (cycling through 15 classes)
-      const classIdx = (studentCount - 1) % classes.length;
-      const targetClass = classes[classIdx];
-      const targetSection = sectionsMap[classNames[classIdx]];
-
-      const student = await prisma.student.create({
+      await prisma.student.create({
         data: {
-          userId: user.id,
-          rollNumber: `ROLL-${studentCount.toString().padStart(3, '0')}`,
-          gender: studentCount % 2 === 0 ? Gender.MALE : Gender.FEMALE,
-          dob: new Date(2010 + (studentCount % 5), 0, 1),
+          userId: sUser.id,
+          rollNumber: kid.roll,
+          gender: kid.gender,
+          dob: new Date(kid.dob),
           schoolId: school.id,
-          classId: targetClass.id,
-          sectionId: targetSection.id,
+          classId: classMap[kid.classLvl].id,
+          sectionId: sectionMap[kid.classLvl].id,
           parents: {
-            connect: { id: parent.id }
-          }
+            connect: { id: parent.id },
+          },
         },
       });
-      studentData.push(student);
     }
   }
-  console.log('✅ 25 Students created and linked to parents');
+  console.log('✅ Parents and Students populated');
 
   // 8. Announcements
   await prisma.announcement.createMany({
     data: [
       {
-        title: 'Holi Holiday Notice',
-        content: 'Dear Parents, the school will remain closed on 25th March for Holi.',
-        type: 'HOLIDAY',
-        priority: 'MEDIUM',
-        allSchool: true,
-        authorId: adminUser1.id,
-        authorName: 'Yug Admin',
-      },
-      {
-        title: 'Mid-Term Exam Schedule',
-        content: 'The mid-term exams for Class 10th will start from next Monday.',
-        type: 'EXAM',
+        title: 'Summer Vacation Timetable Schedule',
+        content: 'Summer vacation will commence from 15th May. Final examinations will wrap by 10th May.',
+        type: NotificationType?.HOLIDAY ?? 'HOLIDAY',
         priority: 'HIGH',
-        allSchool: false,
-        classId: classes.find(c => c.name === 'Class 10th')?.id,
-        authorId: adminUser1.id,
-        authorName: 'Yug Admin',
+        allSchool: true,
+        authorId: adminUser.id,
+        authorName: 'Vikram Rathore (Admin)',
       },
       {
-        title: 'Annual Sports Day',
-        content: 'Get ready for the Annual Sports Day on 15th April!',
-        type: 'EVENT',
-        priority: 'LOW',
-        allSchool: true,
-        authorId: adminUser1.id,
-        authorName: 'Yug Admin',
-      }
-    ]
+        title: 'Parent-Teacher Meeting (PTM) Notification',
+        content: 'Monthly review PTM for classes 9th and 10th is scheduled for this Saturday between 9:00 AM and 1:00 PM.',
+        type: NotificationType?.EVENT ?? 'EVENT',
+        priority: 'MEDIUM',
+        allSchool: false,
+        classId: classMap['10th'].id,
+        authorId: principalUser.id,
+        authorName: 'Dr. Meenakshi Sharma (Principal)',
+      },
+    ],
   });
-  console.log('✅ 3 Announcements created');
+  console.log('✅ Announcements published');
 
-  console.log('🌱 Seeding finished successfully!');
+  // 8. Subscription Plans for Super Admin
+  const existingPlans = await prisma.plan.count();
+  if (existingPlans === 0) {
+    await prisma.plan.createMany({
+      data: [
+        { name: 'Starter Trial', description: 'Evaluation package for growing academies with core classroom tools.', price: 0, duration: 1, isActive: true },
+        { name: 'Standard Campus', description: 'Complete school operating system for medium schools up to 1,000 students.', price: 4999, duration: 12, isActive: true },
+        { name: 'Pro Institutional', description: 'Advanced academic and financial automation suite for large institutes.', price: 9999, duration: 12, isActive: true },
+        { name: 'Enterprise Apex', description: 'Full-featured enterprise plan with multi-campus support and priority SLA.', price: 19999, duration: 12, isActive: true },
+      ],
+    });
+    console.log('✅ 4 Subscription Plans created');
+  }
+
+  console.log('\n=========================================');
+  console.log('📋 ALL CREDENTIALS (Password: School@123)');
+  console.log('=========================================');
+  console.log('🌐 Super Admin: superadmin@yugsoft.com');
+  console.log('👑 School Admin: admin@vidyamandir.edu.in');
+  console.log('🎓 Principal:    principal@vidyamandir.edu.in');
+  console.log('🧑‍🏫 Teacher:      rajesh.sharma@vidyamandir.edu.in');
+  console.log('👨‍👩‍👦 Parent:       sanjay.agarwal@gmail.com');
+  console.log('🎒 Student:      aarav.agarwal@student.edu.in');
+  console.log('=========================================\n');
 }
 
 main()

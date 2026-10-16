@@ -118,11 +118,26 @@ export class SchoolsService {
         take: limit,
         orderBy: { createdAt: 'desc' },
         include: {
+          users: {
+            where: { role: Role.SCHOOL_ADMIN },
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              email: true,
+              phone: true,
+            },
+            take: 1,
+          },
           _count: {
             select: {
               users: true,
               students: true,
               teachers: true,
+              parents: true,
+              classes: true,
+              sections: true,
+              subjects: true,
             },
           },
         },
@@ -145,6 +160,77 @@ export class SchoolsService {
     const school = await this.prisma.school.findUnique({
       where: { id },
       include: {
+        users: {
+          where: {
+            role: { in: [Role.SCHOOL_ADMIN, Role.SUPER_ADMIN] },
+          },
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+            phone: true,
+            role: true,
+            isActive: true,
+            createdAt: true,
+          },
+        },
+        classes: {
+          include: {
+            sections: true,
+            _count: {
+              select: { students: true },
+            },
+          },
+          orderBy: { name: 'asc' },
+        },
+        teachers: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                email: true,
+                phone: true,
+                isActive: true,
+              },
+            },
+          },
+          take: 30,
+        },
+        students: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                email: true,
+                phone: true,
+              },
+            },
+            class: {
+              select: { id: true, name: true },
+            },
+            section: {
+              select: { id: true, name: true },
+            },
+            parents: {
+              include: {
+                user: {
+                  select: {
+                    firstName: true,
+                    lastName: true,
+                    phone: true,
+                    email: true,
+                  },
+                },
+              },
+            },
+          },
+          take: 50,
+        },
         _count: {
           select: {
             users: true,
@@ -152,6 +238,10 @@ export class SchoolsService {
             teachers: true,
             parents: true,
             classes: true,
+            sections: true,
+            subjects: true,
+            vehicles: true,
+            notices: true,
           },
         },
       },
