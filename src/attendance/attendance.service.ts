@@ -608,4 +608,212 @@ export class AttendanceService {
       message: 'Attendance record deleted successfully',
     };
   }
+
+  /**
+   * Get attendance overview for dashboard
+   * Accessible by SCHOOL_ADMIN, TEACHER, SUPER_ADMIN
+   */
+  async getOverview(currentUser: {
+    userId: string;
+    role: Role;
+    schoolId?: string;
+  }) {
+    let schoolId = currentUser.schoolId;
+
+    if (!schoolId) {
+      const firstSchool = await this.prisma.school.findFirst();
+      if (!firstSchool) {
+        return {
+          overview: {
+            studentPresence: 0,
+            staffPresence: 0,
+            absences: 0,
+            totalStudents: 0,
+            totalTeachers: 0,
+            totalClasses: 0,
+          },
+          weeklyTrend: [],
+          classBreakdown: [],
+          recentRecords: [],
+        };
+      }
+      schoolId = firstSchool.id;
+    }
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    // 1. Total counts
+    const [totalStudents, totalTeachers, totalClasses] = await Promise.all([
+      this.prisma.student.count({
+        where: { schoolId, user: { isActive: true } },
+      }),
+      this.prisma.teacher.count({
+        where: { schoolId, user: { isActive: true } },
+      }),
+      this.prisma.class.count({
+        where: { schoolId },
+      }),
+    ]);
+
+    // 2. Today's attendance
+    const todayAttendance = await this.prisma.attendance.findMany({
+      where: {
+        date: { gte: today, lt: tomorrow },
+        student: { schoolId },
+      },
+      include: {
+        student: {
+          include: {
+            user: { select: { firstName: true, lastName: true } },
+            class: { select: { name: true } },
+            section: { select: { name: true } },
+          },
+        },
+      },
+    });
+
+    const totalTodayRecords = todayAttendance.length;
+    const todayPresent = todayAttendance.filter(
+      (a) => a.status === AttendanceStatus.PRESENT,
+    ).length;
+    const todayAbsent = todayAttendance.filter(
+      (a) => a.status === AttendanceStatus.ABSENT,
+    ).length;
+
+    const studentPresence =
+      totalTodayRecords > 0
+        ? Math.round((todayPresent / totalTodayRecords) * 100)
+        : totalStudents > 0
+        ? 100
+        : 0;
+
+    const staffPresence = totalTeachers > 0 ? 100 : 0;
+    const absences = todayAbsent;
+
+    // 3. Last 7 Days Weekly Trend
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - 6);
+    startDate.setHours(0, 0, 0, 0);
+
+    const weekAttendance = await this.prisma.attendance.findMany({
+      where: {
+        date: { gte: startDate, lt: tomorrow },
+        student: { schoolId },
+      },
+      select: {
+        date: true,
+        status: true,
+      },
+    });
+
+    const weeklyTrend = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      d.setHours(0, 0, 0, 0);
+
+      const nextD = new Date(d);
+      nextD.setDate(nextD.getDate() + 1);
+
+      const dayRecords = weekAttendance.filter(
+        (a) => a.date >= d && a.date < nextD,
+      );
+      const total = dayRecords.length;
+      const present = dayRecords.filter(
+        (a) => a.status === AttendanceStatus.PRESENT,
+      ).length;
+      const percentage = total > 0 ? Math.round((present / total) * 100) : 0;
+
+      weeklyTrend.push({
+        day: d.toLocaleDateString('en-US', { weekday: 'short' }).toUpperCase(),
+        date: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        percentage,
+        present,
+        absent: total - present,
+        total,
+        isToday: i === 0,
+        isWeekend: d.getDay() === 0,
+      });
+    }
+
+    // 4. Class-wise attendance breakdown
+    const classes = await this.prisma.class.findMany({
+      where: { schoolId },
+      include: {
+        students: {
+          select: { id: true },
+        },
+      },
+      orderBy: { name: 'asc' },
+    });
+
+    const classBreakdown = [];
+    for (const cls of classes) {
+      if (cls.students.length === 0) continue;
+      const studentIds = cls.students.map((s) => s.id);
+
+      const clsTodayRecords = todayAttendance.filter((a) =>
+        studentIds.includes(a.studentId),
+      );
+      const clsPresent = clsTodayRecords.filter(
+        (a) => a.status === AttendanceStatus.PRESENT,
+      ).length;
+      const clsTotal = cls.students.length;
+      const percentage =
+        clsTotal > 0 ? Math.round((clsPresent / clsTotal) * 100) : 100;
+
+      classBreakdown.push({
+        classId: cls.id,
+        className: cls.name,
+        totalStudents: clsTotal,
+        presentCount: clsPresent,
+        absentCount: clsTotal - clsPresent,
+        percentage,
+      });
+    }
+
+    // 5. Recent attendance records
+    const recentRecords = await this.prisma.attendance.findMany({
+      where: {
+        student: { schoolId },
+      },
+      orderBy: { date: 'desc' },
+      take: 10,
+      include: {
+        student: {
+          include: {
+            user: { select: { firstName: true, lastName: true } },
+            class: { select: { name: true } },
+            section: { select: { name: true } },
+          },
+        },
+      },
+    });
+
+    return {
+      overview: {
+        studentPresence,
+        staffPresence,
+        absences,
+        totalStudents,
+        totalTeachers,
+        totalClasses,
+        todayPresent,
+        todayAbsent,
+      },
+      weeklyTrend,
+      classBreakdown,
+      recentRecords: recentRecords.map((r) => ({
+        id: r.id,
+        studentName: `${r.student.user.firstName} ${r.student.user.lastName}`,
+        rollNumber: r.student.rollNumber,
+        className: `${r.student.class?.name || ''} ${r.student.section?.name ? '-' + r.student.section.name : ''}`.trim(),
+        status: r.status,
+        date: r.date,
+      })),
+    };
+  }
 }

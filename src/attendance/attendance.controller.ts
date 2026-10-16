@@ -60,9 +60,27 @@ export class AttendanceController {
     });
   }
 
+  @Get('overview')
+  @Roles(Role.SCHOOL_ADMIN, Role.SUPER_ADMIN, Role.TEACHER)
+  getOverview(@CurrentUser() user: any) {
+    return this.attendanceService.getOverview({
+      userId: user.userId,
+      role: user.role,
+      schoolId: user.schoolId,
+    });
+  }
+
   @Get('reports')
   @Roles(Role.SCHOOL_ADMIN, Role.SUPER_ADMIN, Role.TEACHER)
   getReports(@Query() query: any, @CurrentUser() user: any) {
+    if (query?.type === 'overview') {
+      return this.attendanceService.getOverview({
+        userId: user.userId,
+        role: user.role,
+        schoolId: user.schoolId,
+      });
+    }
+
     // Map frontend 'start/end' to 'startDate/endDate' if needed
     const reportDto = {
       ...query,

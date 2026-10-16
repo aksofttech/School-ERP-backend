@@ -90,6 +90,7 @@ export class DashboardService {
           select: {
             firstName: true,
             lastName: true,
+            role: true,
           },
         },
       },
@@ -138,14 +139,31 @@ export class DashboardService {
 
       attendanceHistory.push({
         day: date.toLocaleDateString('en-US', { weekday: 'short' }),
+        date: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
         percentage,
+        present,
+        absent: total - present,
+        total,
+        isToday: i === 0,
       });
     }
 
-    // Get resource counts
-    const totalVehicles = await this.prisma.vehicle.count({
-      where: { schoolId: currentUser.schoolId },
-    });
+    // Get transport vehicles & details
+    const [totalVehicles, vehiclesList] = await Promise.all([
+      this.prisma.vehicle.count({
+        where: { schoolId: currentUser.schoolId },
+      }),
+      this.prisma.vehicle.findMany({
+        where: { schoolId: currentUser.schoolId },
+        take: 6,
+        orderBy: { number: 'asc' },
+      }),
+    ]);
+
+    const totalCapacity = vehiclesList.reduce(
+      (sum, v) => sum + (v.capacity || 0),
+      0,
+    );
 
     // Get total users for this school
     const totalUsers = await this.prisma.user.count({
@@ -160,7 +178,9 @@ export class DashboardService {
         activeClasses,
         todayAttendance: attendancePercentage,
         totalVehicles,
+        totalCapacity,
       },
+      vehicles: vehiclesList,
       attendanceHistory,
       recentActivities: recentActivities.map((activity) => ({
         id: activity.id,
@@ -168,6 +188,7 @@ export class DashboardService {
         user: activity.user
           ? `${activity.user.firstName} ${activity.user.lastName}`
           : 'System',
+        role: activity.user?.role || 'STAFF',
         createdAt: activity.createdAt,
       })),
     };

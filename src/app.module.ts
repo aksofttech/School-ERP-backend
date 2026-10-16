@@ -25,6 +25,7 @@ import { SupportModule } from './support/support.module';
 import { SuperAdminModule } from './super-admin/super-admin.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import { PayrollModule } from './payroll/payroll.module';
 import { AppController } from './app.controller';
 import authConfig from './config/auth.config';
 
@@ -60,6 +61,7 @@ import authConfig from './config/auth.config';
     SuperAdminModule,
     DashboardModule,
     NotificationsModule,
+    PayrollModule,
     AuthModule,
     PrismaModule,
   ],

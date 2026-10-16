@@ -102,6 +102,7 @@ model User {
   uploadedDocuments Document[] @relation("UploadedBy")
 
   notifications    Notification[]
+  staffPayments    StaffPayment[]
 }
 
 
@@ -141,6 +142,7 @@ model School {
   notices  Notice[]
   vehicles Vehicle[]
   documents Document[]
+  staffPayments StaffPayment[]
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -482,4 +484,50 @@ model Document {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+model License {
+  id         String   @id @default(uuid())
+  name       String
+  key        String
+  plan       String
+  seats      Int      @default(0)
+  totalSeats Int      @default(100)
+  status     String   @default("Active")
+  expiry     String
+  autoRenew  Boolean  @default(true)
+  icon       String   @default("MS")
+  color      String   @default("indigo")
+  cost       String   @default("₹3,000")
+  vendor     String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @default(now())
+
+  @@map("licenses")
+}
+
+model StaffPayment {
+  id            String    @id @default(uuid())
+  basicSalary   Float
+  allowances    Float     @default(0)
+  deductions    Float     @default(0)
+  netSalary     Float
+  month         String    // e.g. "October 2026"
+  paymentDate   DateTime? @default(now())
+  status        String    @default("PAID") // "PAID", "PENDING"
+  paymentMethod String    @default("Bank Transfer") // "Bank Transfer", "UPI", "Cheque", "Cash"
+  transactionId String?
+  remarks       String?
+
+  staffId       String
+  staff         User      @relation(fields: [staffId], references: [id])
+
+  schoolId      String
+  school        School    @relation(fields: [schoolId], references: [id])
+
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([schoolId])
+  @@index([staffId])
 }

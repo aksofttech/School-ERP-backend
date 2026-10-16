@@ -114,10 +114,23 @@ export class ClassesService {
           },
         },
       },
-      orderBy: { name: 'asc' },
     });
 
-    return classes;
+    // Helper for natural school grade ordering
+    const getGradeWeight = (name: string): number => {
+      const lower = (name || '').toLowerCase().replace('class', '').trim();
+      if (lower.includes('nursery')) return 1;
+      if (lower.includes('lkg') || lower.includes('l.k.g')) return 2;
+      if (lower.includes('ukg') || lower.includes('u.k.g') || lower.includes('kg')) return 3;
+      if (lower.includes('prep')) return 4;
+      const numMatch = lower.match(/\d+/);
+      if (numMatch) {
+        return 10 + parseInt(numMatch[0], 10);
+      }
+      return 999;
+    };
+
+    return classes.sort((a, b) => getGradeWeight(a.name) - getGradeWeight(b.name));
   }
 
   /**
@@ -149,6 +162,18 @@ export class ClassesService {
               },
             },
           },
+        },
+        students: {
+          include: {
+            user: {
+              select: {
+                firstName: true,
+                lastName: true,
+                email: true,
+              },
+            },
+          },
+          orderBy: { rollNumber: 'asc' },
         },
         _count: {
           select: {
