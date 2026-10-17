@@ -348,6 +348,7 @@ export class DashboardService {
         title: h.title,
         dueDate: h.dueDate,
         class: h.class.name,
+        classId: h.classId,
         subject: h.subject.name,
         description: h.description,
       })),
