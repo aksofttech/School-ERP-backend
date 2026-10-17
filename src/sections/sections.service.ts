@@ -95,13 +95,17 @@ export class SectionsService {
     classId: string,
     currentUser: { userId: string; role: Role; schoolId?: string },
   ) {
-    if (currentUser.role !== Role.SCHOOL_ADMIN) {
-      throw new ForbiddenException('Only SCHOOL_ADMIN can list sections');
+    if (
+      currentUser.role !== Role.SCHOOL_ADMIN &&
+      currentUser.role !== Role.TEACHER &&
+      currentUser.role !== Role.SUPER_ADMIN
+    ) {
+      throw new ForbiddenException('Only staff or admins can list sections');
     }
 
     if (!currentUser.schoolId) {
       throw new ForbiddenException(
-        'School admin must be associated with a school',
+        'User must be associated with a school',
       );
     }
 

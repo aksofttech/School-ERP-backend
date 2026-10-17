@@ -19,11 +19,11 @@ import { Role } from '@prisma/client';
 
 @Controller('sections')
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(Role.SCHOOL_ADMIN)
 export class SectionsController {
   constructor(private readonly sectionsService: SectionsService) {}
 
   @Post()
+  @Roles(Role.SCHOOL_ADMIN, Role.SUPER_ADMIN)
   create(@Body() createSectionDto: CreateSectionDto, @CurrentUser() user: any) {
     return this.sectionsService.create(createSectionDto, {
       userId: user.userId,
@@ -33,6 +33,7 @@ export class SectionsController {
   }
 
   @Get('class/:classId')
+  @Roles(Role.SCHOOL_ADMIN, Role.TEACHER, Role.SUPER_ADMIN)
   findAllByClass(@Param('classId') classId: string, @CurrentUser() user: any) {
     return this.sectionsService.findAllByClass(classId, {
       userId: user.userId,
@@ -42,6 +43,7 @@ export class SectionsController {
   }
 
   @Get(':id')
+  @Roles(Role.SCHOOL_ADMIN, Role.TEACHER, Role.SUPER_ADMIN)
   findOne(@Param('id') id: string, @CurrentUser() user: any) {
     return this.sectionsService.findOne(id, {
       userId: user.userId,
@@ -51,6 +53,7 @@ export class SectionsController {
   }
 
   @Patch(':id')
+  @Roles(Role.SCHOOL_ADMIN, Role.SUPER_ADMIN)
   update(
     @Param('id') id: string,
     @Body() updateSectionDto: UpdateSectionDto,

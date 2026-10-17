@@ -212,56 +212,68 @@ export class MarksService {
       );
     }
 
-    // Check for existing marks
-    const existingResults = await this.prisma.examResult.findMany({
-      where: {
-        examId,
-        studentId: { in: studentIds },
-      },
-    });
-
-    if (existingResults.length > 0) {
-      const existingStudentIds = existingResults.map((r) => r.studentId);
-      throw new ConflictException(
-        `Marks already exist for student(s): ${existingStudentIds.join(', ')}. Use update instead.`,
-      );
-    }
-
     // Validate all marks are non-negative
     const invalidMarks = marks.filter((m) => m.marks < 0);
     if (invalidMarks.length > 0) {
       throw new BadRequestException('Marks cannot be negative');
     }
 
-    // Create all marks in transaction
+    // Upsert all marks in transaction
     return await this.prisma.$transaction(async (tx) => {
       const results = await Promise.all(
-        marks.map((mark) =>
-          tx.examResult.create({
-            data: {
+        marks.map(async (mark) => {
+          const existing = await tx.examResult.findFirst({
+            where: {
               examId,
               studentId: mark.studentId,
-              marks: mark.marks,
             },
-            include: {
-              student: {
-                include: {
-                  user: {
-                    select: {
-                      id: true,
-                      firstName: true,
-                      lastName: true,
+          });
+
+          if (existing) {
+            return tx.examResult.update({
+              where: { id: existing.id },
+              data: { marks: mark.marks },
+              include: {
+                student: {
+                  include: {
+                    user: {
+                      select: {
+                        id: true,
+                        firstName: true,
+                        lastName: true,
+                      },
                     },
                   },
                 },
               },
-            },
-          }),
-        ),
+            });
+          } else {
+            return tx.examResult.create({
+              data: {
+                examId,
+                studentId: mark.studentId,
+                marks: mark.marks,
+              },
+              include: {
+                student: {
+                  include: {
+                    user: {
+                      select: {
+                        id: true,
+                        firstName: true,
+                        lastName: true,
+                      },
+                    },
+                  },
+                },
+              },
+            });
+          }
+        }),
       );
 
       return {
-        message: `Marks entered for ${results.length} student(s)`,
+        message: `Marks recorded for ${results.length} student(s)`,
         exam: {
           id: exam.id,
           name: exam.name,

@@ -25,7 +25,7 @@ export class TimetableController {
   constructor(private readonly timetableService: TimetableService) {}
 
   @Post()
-  @Roles(Role.SUPER_ADMIN, Role.SCHOOL_ADMIN)
+  @Roles(Role.SUPER_ADMIN, Role.SCHOOL_ADMIN, Role.TEACHER)
   create(
     @Body() createTimetableDto: CreateTimetableDto,
     @CurrentUser() user: any,
@@ -107,7 +107,7 @@ export class TimetableController {
   }
 
   @Patch(':id')
-  @Roles(Role.SUPER_ADMIN, Role.SCHOOL_ADMIN)
+  @Roles(Role.SUPER_ADMIN, Role.SCHOOL_ADMIN, Role.TEACHER)
   update(
     @Param('id') id: string,
     @Body() updateTimetableDto: UpdateTimetableDto,
@@ -121,7 +121,7 @@ export class TimetableController {
   }
 
   @Delete(':id')
-  @Roles(Role.SUPER_ADMIN, Role.SCHOOL_ADMIN)
+  @Roles(Role.SUPER_ADMIN, Role.SCHOOL_ADMIN, Role.TEACHER)
   remove(@Param('id') id: string, @CurrentUser() user: any) {
     return this.timetableService.remove(id, {
       userId: user.userId,

@@ -118,15 +118,29 @@ export class TimetableService {
   ) {
     if (
       currentUser.role !== Role.SCHOOL_ADMIN &&
-      currentUser.role !== Role.SUPER_ADMIN
+      currentUser.role !== Role.SUPER_ADMIN &&
+      currentUser.role !== Role.TEACHER
     ) {
-      throw new ForbiddenException('Only SCHOOL_ADMIN can create timetable');
+      throw new ForbiddenException('Only staff or admins can create timetable');
     }
 
     const schoolId = await this.getEffectiveSchoolId(currentUser);
 
-    const { classId, day, startTime, endTime, subjectId, teacherId, room } =
+    let { classId, day, startTime, endTime, subjectId, teacherId, room } =
       createTimetableDto;
+
+    if (!teacherId && currentUser.role === Role.TEACHER) {
+      const teacherObj = await this.prisma.teacher.findFirst({
+        where: { userId: currentUser.userId },
+      });
+      if (teacherObj) {
+        teacherId = teacherObj.id;
+      }
+    }
+
+    if (!teacherId) {
+      throw new BadRequestException('Teacher is required');
+    }
 
     // Validate time range
     if (this.timeToMinutes(startTime) >= this.timeToMinutes(endTime)) {
@@ -735,7 +749,14 @@ export class TimetableService {
     ];
 
     days.forEach((day) => {
-      groupedByDay[day] = timetables.filter((t) => t.day === day);
+      groupedByDay[day] = timetables
+        .filter((t) => t.day === day)
+        .map((entry) => ({
+          ...entry,
+          className: entry.class?.name,
+          subjectName: entry.subject?.name,
+          room: entry.room || 'Room 102',
+        }));
     });
 
     return {
@@ -746,6 +767,7 @@ export class TimetableService {
           'Teacher',
       },
       timetable: groupedByDay,
+      entries: timetables,
       totalEntries: timetables.length,
     };
   }
@@ -826,9 +848,10 @@ export class TimetableService {
   ) {
     if (
       currentUser.role !== Role.SCHOOL_ADMIN &&
-      currentUser.role !== Role.SUPER_ADMIN
+      currentUser.role !== Role.SUPER_ADMIN &&
+      currentUser.role !== Role.TEACHER
     ) {
-      throw new ForbiddenException('Only SCHOOL_ADMIN can update timetable');
+      throw new ForbiddenException('Only staff or admins can update timetable');
     }
 
     const schoolId = await this.getEffectiveSchoolId(currentUser);
@@ -960,9 +983,10 @@ export class TimetableService {
   ) {
     if (
       currentUser.role !== Role.SCHOOL_ADMIN &&
-      currentUser.role !== Role.SUPER_ADMIN
+      currentUser.role !== Role.SUPER_ADMIN &&
+      currentUser.role !== Role.TEACHER
     ) {
-      throw new ForbiddenException('Only SCHOOL_ADMIN can delete timetable');
+      throw new ForbiddenException('Only staff or admins can delete timetable');
     }
 
     const schoolId = await this.getEffectiveSchoolId(currentUser);

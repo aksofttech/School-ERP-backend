@@ -110,10 +110,12 @@ export class HomeworkService {
       }
     }
 
-    // Validate due date is in the future
+    // Validate due date is today or in the future
     const dueDateObj = new Date(dueDate);
-    if (dueDateObj < new Date()) {
-      throw new BadRequestException('Due date must be in the future');
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+    if (dueDateObj < startOfToday) {
+      throw new BadRequestException('Due date cannot be in the past');
     }
 
     // Create homework
@@ -166,7 +168,7 @@ export class HomeworkService {
     listHomeworkDto: ListHomeworkDto,
     currentUser: { userId: string; role: Role; schoolId?: string },
   ): Promise<PaginatedResult<any>> {
-    const { page = 1, limit = 10, classId, subjectId } = listHomeworkDto;
+    const { page = 1, limit = 50, classId, subjectId } = listHomeworkDto;
     const skip = (page - 1) * limit;
 
     const where: any = {};
@@ -203,9 +205,16 @@ export class HomeworkService {
       }
 
       where.classId = student.classId;
+    } else if (
+      currentUser.role === Role.SCHOOL_ADMIN ||
+      currentUser.role === Role.SUPER_ADMIN
+    ) {
+      if (currentUser.schoolId) {
+        where.class = { schoolId: currentUser.schoolId };
+      }
     } else {
       throw new ForbiddenException(
-        'Only TEACHER and STUDENT can view homework',
+        'Access denied to view homework',
       );
     }
 
@@ -448,22 +457,31 @@ export class HomeworkService {
     updateHomeworkDto: UpdateHomeworkDto,
     currentUser: { userId: string; role: Role; schoolId?: string },
   ) {
-    if (currentUser.role !== Role.TEACHER) {
-      throw new ForbiddenException('Only TEACHER can update homework');
+    const isTeacher = currentUser.role === Role.TEACHER;
+    const isAdmin =
+      currentUser.role === Role.SCHOOL_ADMIN ||
+      currentUser.role === Role.SUPER_ADMIN;
+
+    if (!isTeacher && !isAdmin) {
+      throw new ForbiddenException('Only TEACHER or ADMIN can update homework');
     }
 
     if (!currentUser.schoolId) {
-      throw new ForbiddenException('Teacher must be associated with a school');
+      throw new ForbiddenException('User must be associated with a school');
     }
 
-    const teacher = await this.prisma.teacher.findFirst({
-      where: {
-        userId: currentUser.userId,
-      },
-    });
+    let teacherId: string | null = null;
+    if (isTeacher) {
+      const teacher = await this.prisma.teacher.findFirst({
+        where: {
+          userId: currentUser.userId,
+        },
+      });
 
-    if (!teacher) {
-      throw new NotFoundException('Teacher profile not found');
+      if (!teacher) {
+        throw new NotFoundException('Teacher profile not found');
+      }
+      teacherId = teacher.id;
     }
 
     const homework = await this.prisma.homework.findUnique({
@@ -474,8 +492,8 @@ export class HomeworkService {
       throw new NotFoundException(`Homework with ID ${id} not found`);
     }
 
-    // Verify teacher owns this homework
-    if (homework.teacherId !== teacher.id) {
+    // Verify teacher owns this homework (if teacher)
+    if (isTeacher && homework.teacherId !== teacherId) {
       throw new ForbiddenException(
         'Access denied. You can only update homework you assigned',
       );
@@ -484,8 +502,10 @@ export class HomeworkService {
     // Validate due date if being updated
     if (updateHomeworkDto.dueDate) {
       const dueDateObj = new Date(updateHomeworkDto.dueDate);
-      if (dueDateObj < new Date()) {
-        throw new BadRequestException('Due date must be in the future');
+      const startOfToday = new Date();
+      startOfToday.setHours(0, 0, 0, 0);
+      if (dueDateObj < startOfToday) {
+        throw new BadRequestException('Due date cannot be in the past');
       }
     }
 
@@ -498,6 +518,12 @@ export class HomeworkService {
         }),
         ...(updateHomeworkDto.dueDate && {
           dueDate: new Date(updateHomeworkDto.dueDate),
+        }),
+        ...(updateHomeworkDto.subjectId && {
+          subjectId: updateHomeworkDto.subjectId,
+        }),
+        ...(updateHomeworkDto.classId && {
+          classId: updateHomeworkDto.classId,
         }),
       },
       include: {
@@ -533,28 +559,37 @@ export class HomeworkService {
 
   /**
    * Delete homework
-   * Only TEACHER can delete homework they assigned
+   * TEACHER can delete homework they assigned, ADMIN can delete any homework in their school
    */
   async remove(
     id: string,
     currentUser: { userId: string; role: Role; schoolId?: string },
   ) {
-    if (currentUser.role !== Role.TEACHER) {
-      throw new ForbiddenException('Only TEACHER can delete homework');
+    const isTeacher = currentUser.role === Role.TEACHER;
+    const isAdmin =
+      currentUser.role === Role.SCHOOL_ADMIN ||
+      currentUser.role === Role.SUPER_ADMIN;
+
+    if (!isTeacher && !isAdmin) {
+      throw new ForbiddenException('Only TEACHER or ADMIN can delete homework');
     }
 
     if (!currentUser.schoolId) {
-      throw new ForbiddenException('Teacher must be associated with a school');
+      throw new ForbiddenException('User must be associated with a school');
     }
 
-    const teacher = await this.prisma.teacher.findFirst({
-      where: {
-        userId: currentUser.userId,
-      },
-    });
+    let teacherId: string | null = null;
+    if (isTeacher) {
+      const teacher = await this.prisma.teacher.findFirst({
+        where: {
+          userId: currentUser.userId,
+        },
+      });
 
-    if (!teacher) {
-      throw new NotFoundException('Teacher profile not found');
+      if (!teacher) {
+        throw new NotFoundException('Teacher profile not found');
+      }
+      teacherId = teacher.id;
     }
 
     const homework = await this.prisma.homework.findUnique({
@@ -565,8 +600,8 @@ export class HomeworkService {
       throw new NotFoundException(`Homework with ID ${id} not found`);
     }
 
-    // Verify teacher owns this homework
-    if (homework.teacherId !== teacher.id) {
+    // Verify teacher owns this homework (if teacher)
+    if (isTeacher && homework.teacherId !== teacherId) {
       throw new ForbiddenException(
         'Access denied. You can only delete homework you assigned',
       );
