@@ -24,11 +24,16 @@ export class TransportService {
     createVehicleDto: CreateVehicleDto,
     currentUser: { userId: string; role: Role; schoolId?: string },
   ) {
-    if (currentUser.role !== Role.SCHOOL_ADMIN) {
+    if (
+      currentUser.role !== Role.SCHOOL_ADMIN &&
+      currentUser.role !== Role.SUPER_ADMIN
+    ) {
       throw new ForbiddenException('Only SCHOOL_ADMIN can manage vehicles');
     }
 
-    if (!currentUser.schoolId) {
+    const schoolId =
+      currentUser.schoolId || (await this.prisma.school.findFirst())?.id;
+    if (!schoolId) {
       throw new ForbiddenException(
         'School admin must be associated with a school',
       );
@@ -40,7 +45,7 @@ export class TransportService {
     const existingVehicle = await this.prisma.vehicle.findFirst({
       where: {
         number,
-        schoolId: currentUser.schoolId,
+        schoolId,
       },
     });
 
@@ -58,7 +63,7 @@ export class TransportService {
         model,
         phone,
         capacity,
-        schoolId: currentUser.schoolId,
+        schoolId,
       },
     });
 
@@ -77,11 +82,16 @@ export class TransportService {
     listVehiclesDto: ListVehiclesDto,
     currentUser: { userId: string; role: Role; schoolId?: string },
   ): Promise<PaginatedResult<any>> {
-    if (currentUser.role !== Role.SCHOOL_ADMIN) {
+    if (
+      currentUser.role !== Role.SCHOOL_ADMIN &&
+      currentUser.role !== Role.SUPER_ADMIN
+    ) {
       throw new ForbiddenException('Only SCHOOL_ADMIN can view vehicles');
     }
 
-    if (!currentUser.schoolId) {
+    const schoolId =
+      currentUser.schoolId || (await this.prisma.school.findFirst())?.id;
+    if (!schoolId) {
       throw new ForbiddenException(
         'School admin must be associated with a school',
       );
@@ -91,7 +101,7 @@ export class TransportService {
     const skip = (page - 1) * limit;
 
     const where: any = {
-      schoolId: currentUser.schoolId,
+      schoolId,
     };
 
     // Note: Route filtering would require a Route model

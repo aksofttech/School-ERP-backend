@@ -25,7 +25,7 @@ export class TransportController {
   constructor(private readonly transportService: TransportService) {}
 
   @Post('vehicles')
-  @Roles(Role.SCHOOL_ADMIN)
+  @Roles(Role.SCHOOL_ADMIN, Role.SUPER_ADMIN)
   createVehicle(
     @Body() createVehicleDto: CreateVehicleDto,
     @CurrentUser() user: any,
@@ -38,7 +38,7 @@ export class TransportController {
   }
 
   @Get('vehicles')
-  @Roles(Role.SCHOOL_ADMIN)
+  @Roles(Role.SCHOOL_ADMIN, Role.SUPER_ADMIN)
   findAllVehicles(
     @Query() listVehiclesDto: ListVehiclesDto,
     @CurrentUser() user: any,
@@ -51,7 +51,7 @@ export class TransportController {
   }
 
   @Get('vehicles/:id')
-  @Roles(Role.SCHOOL_ADMIN)
+  @Roles(Role.SCHOOL_ADMIN, Role.SUPER_ADMIN)
   findOneVehicle(@Param('id') id: string, @CurrentUser() user: any) {
     return this.transportService.findOneVehicle(id, {
       userId: user.userId,
@@ -61,7 +61,7 @@ export class TransportController {
   }
 
   @Get('vehicles/:id/students')
-  @Roles(Role.SCHOOL_ADMIN)
+  @Roles(Role.SCHOOL_ADMIN, Role.SUPER_ADMIN)
   getVehicleStudents(@Param('id') id: string, @CurrentUser() user: any) {
     return this.transportService.getVehicleStudents(id, {
       userId: user.userId,
@@ -71,7 +71,7 @@ export class TransportController {
   }
 
   @Post('routes/assign')
-  @Roles(Role.SCHOOL_ADMIN)
+  @Roles(Role.SCHOOL_ADMIN, Role.SUPER_ADMIN)
   assignRoute(
     @Body() assignRouteDto: AssignRouteDto,
     @CurrentUser() user: any,
@@ -84,7 +84,7 @@ export class TransportController {
   }
 
   @Patch('vehicles/:id')
-  @Roles(Role.SCHOOL_ADMIN)
+  @Roles(Role.SCHOOL_ADMIN, Role.SUPER_ADMIN)
   updateVehicle(
     @Param('id') id: string,
     @Body() updateVehicleDto: UpdateVehicleDto,
@@ -98,7 +98,7 @@ export class TransportController {
   }
 
   @Delete('vehicles/:id')
-  @Roles(Role.SCHOOL_ADMIN)
+  @Roles(Role.SCHOOL_ADMIN, Role.SUPER_ADMIN)
   removeVehicle(@Param('id') id: string, @CurrentUser() user: any) {
     return this.transportService.removeVehicle(id, {
       userId: user.userId,

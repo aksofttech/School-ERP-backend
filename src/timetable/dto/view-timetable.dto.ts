@@ -9,6 +9,11 @@ export class ViewTimetableDto {
   classId?: string;
 
   @IsOptional()
+  @IsUUID()
+  @Type(() => String)
+  teacherId?: string;
+
+  @IsOptional()
   @IsEnum(DayOfWeek)
   day?: DayOfWeek;
 }

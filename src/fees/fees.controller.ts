@@ -24,7 +24,7 @@ export class FeesController {
   constructor(private readonly feesService: FeesService) {}
 
   @Get('dashboard')
-  @Roles(Role.SCHOOL_ADMIN)
+  @Roles(Role.SCHOOL_ADMIN, Role.SUPER_ADMIN)
   getDashboardStats(@CurrentUser() user: any) {
     return this.feesService.getDashboardStats({
       userId: user.userId,
@@ -34,7 +34,7 @@ export class FeesController {
   }
 
   @Post()
-  @Roles(Role.SCHOOL_ADMIN)
+  @Roles(Role.SCHOOL_ADMIN, Role.SUPER_ADMIN)
   create(@Body() createFeeDto: CreateFeeDto, @CurrentUser() user: any) {
     return this.feesService.create(createFeeDto, {
       userId: user.userId,
@@ -44,7 +44,7 @@ export class FeesController {
   }
 
   @Get()
-  @Roles(Role.SCHOOL_ADMIN, Role.PARENT)
+  @Roles(Role.SCHOOL_ADMIN, Role.SUPER_ADMIN, Role.PARENT)
   findAll(@Query() listFeesDto: ListFeesDto, @CurrentUser() user: any) {
     return this.feesService.findAll(listFeesDto, {
       userId: user.userId,
@@ -54,7 +54,7 @@ export class FeesController {
   }
 
   @Get('student/:studentId/history')
-  @Roles(Role.SCHOOL_ADMIN, Role.PARENT)
+  @Roles(Role.SCHOOL_ADMIN, Role.SUPER_ADMIN, Role.PARENT)
   getStudentFeeHistory(
     @Param('studentId') studentId: string,
     @CurrentUser() user: any,
@@ -67,7 +67,7 @@ export class FeesController {
   }
 
   @Get(':id')
-  @Roles(Role.SCHOOL_ADMIN, Role.PARENT)
+  @Roles(Role.SCHOOL_ADMIN, Role.SUPER_ADMIN, Role.PARENT)
   findOne(@Param('id') id: string, @CurrentUser() user: any) {
     return this.feesService.findOne(id, {
       userId: user.userId,
@@ -77,7 +77,7 @@ export class FeesController {
   }
 
   @Patch(':id')
-  @Roles(Role.SCHOOL_ADMIN)
+  @Roles(Role.SCHOOL_ADMIN, Role.SUPER_ADMIN)
   update(
     @Param('id') id: string,
     @Body() updateFeeDto: UpdateFeeDto,
@@ -91,7 +91,7 @@ export class FeesController {
   }
 
   @Patch(':id/mark-paid')
-  @Roles(Role.SCHOOL_ADMIN)
+  @Roles(Role.SCHOOL_ADMIN, Role.SUPER_ADMIN)
   markAsPaid(@Param('id') id: string, @CurrentUser() user: any) {
     return this.feesService.markAsPaid(id, {
       userId: user.userId,
@@ -101,7 +101,7 @@ export class FeesController {
   }
 
   @Delete(':id')
-  @Roles(Role.SCHOOL_ADMIN)
+  @Roles(Role.SCHOOL_ADMIN, Role.SUPER_ADMIN)
   remove(@Param('id') id: string, @CurrentUser() user: any) {
     return this.feesService.remove(id, {
       userId: user.userId,

@@ -13,9 +13,20 @@ import { Role } from '@prisma/client';
 export class ExamsService {
   constructor(private readonly prisma: PrismaService) {}
 
+  private async getEffectiveSchoolId(currentUser: { userId: string; role: Role; schoolId?: string }): Promise<string> {
+    if (currentUser.schoolId) {
+      return currentUser.schoolId;
+    }
+    const school = await this.prisma.school.findFirst({ select: { id: true } });
+    if (!school) {
+      throw new BadRequestException('No school found in database');
+    }
+    return school.id;
+  }
+
   /**
    * Create exam per class
-   * Only TEACHER can create exams
+   * SCHOOL_ADMIN, SUPER_ADMIN, and TEACHER can create exams
    */
   async create(
     createExamDto: CreateExamDto,
@@ -23,26 +34,27 @@ export class ExamsService {
   ) {
     if (
       currentUser.role !== Role.TEACHER &&
-      currentUser.role !== Role.SCHOOL_ADMIN
+      currentUser.role !== Role.SCHOOL_ADMIN &&
+      currentUser.role !== Role.SUPER_ADMIN
     ) {
       throw new ForbiddenException(
         'Only TEACHER or SCHOOL_ADMIN can create exams',
       );
     }
 
-    if (!currentUser.schoolId) {
-      throw new ForbiddenException('Teacher must be associated with a school');
-    }
+    const schoolId = await this.getEffectiveSchoolId(currentUser);
 
-    // Verify teacher exists
-    const teacher = await this.prisma.teacher.findFirst({
-      where: {
-        userId: currentUser.userId,
-      },
-    });
+    // If teacher, verify teacher profile
+    if (currentUser.role === Role.TEACHER) {
+      const teacher = await this.prisma.teacher.findFirst({
+        where: {
+          userId: currentUser.userId,
+        },
+      });
 
-    if (!teacher) {
-      throw new NotFoundException('Teacher profile not found');
+      if (!teacher) {
+        throw new NotFoundException('Teacher profile not found');
+      }
     }
 
     const { name, type, date, classId, totalMarks, passingMarks } =
@@ -57,7 +69,7 @@ export class ExamsService {
       throw new NotFoundException(`Class with ID ${classId} not found`);
     }
 
-    if (classEntity.schoolId !== currentUser.schoolId) {
+    if (classEntity.schoolId !== schoolId) {
       throw new ForbiddenException(
         'Access denied. You can only create exams for classes in your school',
       );
@@ -93,7 +105,7 @@ export class ExamsService {
 
   /**
    * List exams
-   * - TEACHER can view exams for classes in their school
+   * - SCHOOL_ADMIN / SUPER_ADMIN / TEACHER can view exams for classes in their school
    * - STUDENT/PARENT can view exams for their class
    */
   async findAll(
@@ -102,15 +114,15 @@ export class ExamsService {
   ) {
     const where: any = {};
 
-    if (currentUser.role === Role.TEACHER) {
-      if (!currentUser.schoolId) {
-        throw new ForbiddenException(
-          'Teacher must be associated with a school',
-        );
-      }
+    if (
+      currentUser.role === Role.SCHOOL_ADMIN ||
+      currentUser.role === Role.SUPER_ADMIN ||
+      currentUser.role === Role.TEACHER
+    ) {
+      const schoolId = await this.getEffectiveSchoolId(currentUser);
 
       where.class = {
-        schoolId: currentUser.schoolId,
+        schoolId,
       };
 
       if (classId) {
@@ -152,7 +164,7 @@ export class ExamsService {
       where.classId = { in: classIds };
     } else {
       throw new ForbiddenException(
-        'Only TEACHER, STUDENT, and PARENT can view exams',
+        'Unauthorized to view exams',
       );
     }
 
@@ -179,8 +191,6 @@ export class ExamsService {
 
   /**
    * Get exam by ID
-   * - TEACHER can view exams for classes in their school
-   * - STUDENT/PARENT can view exams for their class
    */
   async findOne(
     id: string,
@@ -223,12 +233,15 @@ export class ExamsService {
       throw new NotFoundException(`Exam with ID ${id} not found`);
     }
 
+    const schoolId = await this.getEffectiveSchoolId(currentUser);
+
     // RBAC checks
-    if (currentUser.role === Role.TEACHER) {
-      if (
-        !currentUser.schoolId ||
-        exam.class.schoolId !== currentUser.schoolId
-      ) {
+    if (
+      currentUser.role === Role.SCHOOL_ADMIN ||
+      currentUser.role === Role.SUPER_ADMIN ||
+      currentUser.role === Role.TEACHER
+    ) {
+      if (exam.class.schoolId !== schoolId) {
         throw new ForbiddenException(
           'Access denied. You can only view exams for classes in your school',
         );
@@ -265,10 +278,6 @@ export class ExamsService {
           "Access denied. You can only view exams for your linked students' classes",
         );
       }
-    } else {
-      throw new ForbiddenException(
-        'Only TEACHER, STUDENT, and PARENT can view exams',
-      );
     }
 
     return exam;
@@ -276,7 +285,6 @@ export class ExamsService {
 
   /**
    * Update exam
-   * Only TEACHER can update exams
    */
   async update(
     id: string,
@@ -285,16 +293,15 @@ export class ExamsService {
   ) {
     if (
       currentUser.role !== Role.TEACHER &&
-      currentUser.role !== Role.SCHOOL_ADMIN
+      currentUser.role !== Role.SCHOOL_ADMIN &&
+      currentUser.role !== Role.SUPER_ADMIN
     ) {
       throw new ForbiddenException(
         'Only TEACHER or SCHOOL_ADMIN can update exams',
       );
     }
 
-    if (!currentUser.schoolId) {
-      throw new ForbiddenException('Teacher must be associated with a school');
-    }
+    const schoolId = await this.getEffectiveSchoolId(currentUser);
 
     const exam = await this.prisma.exam.findUnique({
       where: { id },
@@ -307,8 +314,7 @@ export class ExamsService {
       throw new NotFoundException(`Exam with ID ${id} not found`);
     }
 
-    // Verify exam belongs to teacher's school
-    if (exam.class.schoolId !== currentUser.schoolId) {
+    if (exam.class.schoolId !== schoolId) {
       throw new ForbiddenException(
         'Access denied. You can only update exams for classes in your school',
       );
@@ -347,7 +353,6 @@ export class ExamsService {
 
   /**
    * Delete exam
-   * Only TEACHER can delete exams
    */
   async remove(
     id: string,
@@ -355,16 +360,15 @@ export class ExamsService {
   ) {
     if (
       currentUser.role !== Role.TEACHER &&
-      currentUser.role !== Role.SCHOOL_ADMIN
+      currentUser.role !== Role.SCHOOL_ADMIN &&
+      currentUser.role !== Role.SUPER_ADMIN
     ) {
       throw new ForbiddenException(
         'Only TEACHER or SCHOOL_ADMIN can delete exams',
       );
     }
 
-    if (!currentUser.schoolId) {
-      throw new ForbiddenException('Teacher must be associated with a school');
-    }
+    const schoolId = await this.getEffectiveSchoolId(currentUser);
 
     const exam = await this.prisma.exam.findUnique({
       where: { id },
@@ -382,23 +386,19 @@ export class ExamsService {
       throw new NotFoundException(`Exam with ID ${id} not found`);
     }
 
-    // Verify exam belongs to teacher's school
-    if (exam.class.schoolId !== currentUser.schoolId) {
+    if (exam.class.schoolId !== schoolId) {
       throw new ForbiddenException(
         'Access denied. You can only delete exams for classes in your school',
       );
     }
 
-    // Use transaction to delete exam and results
     return await this.prisma.$transaction(async (tx) => {
-      // Delete all results first
       if (exam._count.results > 0) {
         await tx.examResult.deleteMany({
           where: { examId: id },
         });
       }
 
-      // Delete exam
       await tx.exam.delete({
         where: { id },
       });

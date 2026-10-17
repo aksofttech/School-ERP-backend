@@ -25,7 +25,7 @@ export class TimetableController {
   constructor(private readonly timetableService: TimetableService) {}
 
   @Post()
-  @Roles(Role.SCHOOL_ADMIN)
+  @Roles(Role.SUPER_ADMIN, Role.SCHOOL_ADMIN)
   create(
     @Body() createTimetableDto: CreateTimetableDto,
     @CurrentUser() user: any,
@@ -38,7 +38,7 @@ export class TimetableController {
   }
 
   @Post('weekly')
-  @Roles(Role.SCHOOL_ADMIN)
+  @Roles(Role.SUPER_ADMIN, Role.SCHOOL_ADMIN)
   createWeekly(
     @Body() createWeeklyTimetableDto: CreateWeeklyTimetableDto,
     @CurrentUser() user: any,
@@ -85,6 +85,18 @@ export class TimetableController {
     });
   }
 
+  @Get('teacher/:teacherId')
+  findByTeacher(
+    @Param('teacherId') teacherId: string,
+    @CurrentUser() user: any,
+  ) {
+    return this.timetableService.findByTeacher(teacherId, {
+      userId: user.userId,
+      role: user.role,
+      schoolId: user.schoolId,
+    });
+  }
+
   @Get(':id')
   findOne(@Param('id') id: string, @CurrentUser() user: any) {
     return this.timetableService.findOne(id, {
@@ -95,7 +107,7 @@ export class TimetableController {
   }
 
   @Patch(':id')
-  @Roles(Role.SCHOOL_ADMIN)
+  @Roles(Role.SUPER_ADMIN, Role.SCHOOL_ADMIN)
   update(
     @Param('id') id: string,
     @Body() updateTimetableDto: UpdateTimetableDto,
@@ -109,7 +121,7 @@ export class TimetableController {
   }
 
   @Delete(':id')
-  @Roles(Role.SCHOOL_ADMIN)
+  @Roles(Role.SUPER_ADMIN, Role.SCHOOL_ADMIN)
   remove(@Param('id') id: string, @CurrentUser() user: any) {
     return this.timetableService.remove(id, {
       userId: user.userId,

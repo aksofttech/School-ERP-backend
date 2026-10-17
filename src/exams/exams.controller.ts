@@ -23,7 +23,7 @@ export class ExamsController {
   constructor(private readonly examsService: ExamsService) {}
 
   @Post()
-  @Roles(Role.SCHOOL_ADMIN, Role.TEACHER)
+  @Roles(Role.SUPER_ADMIN, Role.SCHOOL_ADMIN, Role.TEACHER)
   create(@Body() createExamDto: CreateExamDto, @CurrentUser() user: any) {
     return this.examsService.create(createExamDto, {
       userId: user.userId,
@@ -33,7 +33,7 @@ export class ExamsController {
   }
 
   @Get()
-  @Roles(Role.SCHOOL_ADMIN, Role.TEACHER, Role.STUDENT, Role.PARENT)
+  @Roles(Role.SUPER_ADMIN, Role.SCHOOL_ADMIN, Role.TEACHER, Role.STUDENT, Role.PARENT)
   findAll(@Query('classId') classId: string, @CurrentUser() user: any) {
     return this.examsService.findAll(
       {
@@ -46,7 +46,7 @@ export class ExamsController {
   }
 
   @Get(':id')
-  @Roles(Role.SCHOOL_ADMIN, Role.TEACHER, Role.STUDENT, Role.PARENT)
+  @Roles(Role.SUPER_ADMIN, Role.SCHOOL_ADMIN, Role.TEACHER, Role.STUDENT, Role.PARENT)
   findOne(@Param('id') id: string, @CurrentUser() user: any) {
     return this.examsService.findOne(id, {
       userId: user.userId,
@@ -56,7 +56,7 @@ export class ExamsController {
   }
 
   @Patch(':id')
-  @Roles(Role.SCHOOL_ADMIN, Role.TEACHER)
+  @Roles(Role.SUPER_ADMIN, Role.SCHOOL_ADMIN, Role.TEACHER)
   update(
     @Param('id') id: string,
     @Body() updateExamDto: UpdateExamDto,
@@ -70,7 +70,7 @@ export class ExamsController {
   }
 
   @Delete(':id')
-  @Roles(Role.SCHOOL_ADMIN, Role.TEACHER)
+  @Roles(Role.SUPER_ADMIN, Role.SCHOOL_ADMIN, Role.TEACHER)
   remove(@Param('id') id: string, @CurrentUser() user: any) {
     return this.examsService.remove(id, {
       userId: user.userId,

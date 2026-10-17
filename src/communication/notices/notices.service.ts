@@ -43,7 +43,9 @@ export class NoticesService {
   ) {
     this.checkPermission(currentUser);
 
-    if (!currentUser.schoolId) {
+    const schoolId =
+      currentUser.schoolId || (await this.prisma.school.findFirst())?.id;
+    if (!schoolId) {
       throw new ForbiddenException('User must be associated with a school');
     }
 
@@ -67,7 +69,7 @@ export class NoticesService {
         throw new NotFoundException(`Class with ID ${classId} not found`);
       }
 
-      if (classEntity.schoolId !== currentUser.schoolId) {
+      if (classEntity.schoolId !== schoolId) {
         throw new ForbiddenException(
           'Access denied. You can only create notices for classes in your school',
         );
@@ -83,7 +85,7 @@ export class NoticesService {
         status: (status as any) || NoticeStatus.PUBLISHED,
         publishDate: publishDate ? new Date(publishDate) : new Date(),
         attachments: attachments || null,
-        schoolId: currentUser.schoolId,
+        schoolId,
       },
       include: {
         school: {
@@ -149,8 +151,11 @@ export class NoticesService {
     const { page = 1, limit = 10, audience } = listNoticesDto;
     const skip = (page - 1) * limit;
 
+    const schoolId =
+      currentUser.schoolId || (await this.prisma.school.findFirst())?.id;
+
     const where: any = {
-      schoolId: currentUser.schoolId,
+      schoolId,
     };
 
     if (currentUser.role === Role.STUDENT) {
@@ -159,9 +164,6 @@ export class NoticesService {
     } else if (currentUser.role === Role.TEACHER) {
       // Teachers see what's for them OR ALL
       where.audience = { in: [NoticeAudience.ALL, NoticeAudience.TEACHERS] };
-      // Admin/Teachers usually see all statuses in dashboard?
-      // Actually this findAll is used by dashboard too.
-      // Let's refine: if requester is admin/teacher, show all for that school.
     } else if (currentUser.role === Role.PARENT) {
       where.audience = { in: [NoticeAudience.ALL, NoticeAudience.PARENTS] };
       where.status = NoticeStatus.PUBLISHED;
@@ -174,7 +176,7 @@ export class NoticesService {
     ) {
       delete where.audience;
       delete where.status;
-      where.schoolId = currentUser.schoolId;
+      where.schoolId = schoolId;
     }
 
     const [data, total] = await Promise.all([

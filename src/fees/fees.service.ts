@@ -136,30 +136,24 @@ export class FeesService {
 
     const where: any = {};
 
-    if (currentUser.role === Role.SCHOOL_ADMIN) {
-      if (!currentUser.schoolId) {
+    if (
+      currentUser.role === Role.SCHOOL_ADMIN ||
+      currentUser.role === Role.SUPER_ADMIN
+    ) {
+      const schoolId =
+        currentUser.schoolId || (await this.prisma.school.findFirst())?.id;
+      if (!schoolId) {
         throw new ForbiddenException(
           'School admin must be associated with a school',
         );
       }
 
-      // SCHOOL_ADMIN can view all fees in their school
+      // SCHOOL_ADMIN/SUPER_ADMIN can view all fees in their school
       where.student = {
-        schoolId: currentUser.schoolId,
+        schoolId,
       };
 
       if (studentId) {
-        // Verify student belongs to school
-        const student = await this.prisma.student.findUnique({
-          where: { id: studentId },
-        });
-
-        if (!student || student.schoolId !== currentUser.schoolId) {
-          throw new ForbiddenException(
-            'Access denied. You can only view fees for students in your school',
-          );
-        }
-
         where.studentId = studentId;
       }
     } else if (currentUser.role === Role.PARENT) {
@@ -577,11 +571,16 @@ export class FeesService {
     id: string,
     currentUser: { userId: string; role: Role; schoolId?: string },
   ) {
-    if (currentUser.role !== Role.SCHOOL_ADMIN) {
+    if (
+      currentUser.role !== Role.SCHOOL_ADMIN &&
+      currentUser.role !== Role.SUPER_ADMIN
+    ) {
       throw new ForbiddenException('Only SCHOOL_ADMIN can mark fees as paid');
     }
 
-    if (!currentUser.schoolId) {
+    const schoolId =
+      currentUser.schoolId || (await this.prisma.school.findFirst())?.id;
+    if (!schoolId) {
       throw new ForbiddenException(
         'School admin must be associated with a school',
       );
@@ -599,7 +598,7 @@ export class FeesService {
     }
 
     // Verify fee belongs to school admin's school
-    if (fee.student.schoolId !== currentUser.schoolId) {
+    if (fee.student.schoolId !== schoolId) {
       throw new ForbiddenException(
         'Access denied. You can only mark fees as paid for students in your school',
       );
@@ -690,7 +689,9 @@ export class FeesService {
     role: Role;
     schoolId?: string;
   }) {
-    if (!currentUser.schoolId) {
+    const schoolId =
+      currentUser.schoolId || (await this.prisma.school.findFirst())?.id;
+    if (!schoolId) {
       throw new ForbiddenException('User must be associated with a school');
     }
 
@@ -702,7 +703,7 @@ export class FeesService {
     // 1. Total Fees Collected (All time for this school)
     const totalCollected = await this.prisma.fee.aggregate({
       where: {
-        student: { schoolId: currentUser.schoolId },
+        student: { schoolId },
         status: FeeStatus.PAID,
       },
       _sum: { amount: true },
@@ -711,7 +712,7 @@ export class FeesService {
     // 2. Outstanding Balance (Pending + Overdue)
     const outstandingBalance = await this.prisma.fee.aggregate({
       where: {
-        student: { schoolId: currentUser.schoolId },
+        student: { schoolId },
         status: { in: [FeeStatus.PENDING, FeeStatus.OVERDUE] },
       },
       _sum: { amount: true },
@@ -720,20 +721,28 @@ export class FeesService {
     // 3. Today's Collection
     const todayCollection = await this.prisma.fee.aggregate({
       where: {
-        student: { schoolId: currentUser.schoolId },
+        student: { schoolId },
         status: FeeStatus.PAID,
         updatedAt: { gte: today, lt: tomorrow },
       },
       _sum: { amount: true },
     });
 
+    // 4. Overdue Count
+    const overdueCount = await this.prisma.fee.count({
+      where: {
+        student: { schoolId },
+        status: FeeStatus.OVERDUE,
+      },
+    });
+
     // 5. Recent Transactions
     const recentTransactions = await this.prisma.fee.findMany({
       where: {
-        student: { schoolId: currentUser.schoolId },
+        student: { schoolId },
       },
       orderBy: { updatedAt: 'desc' },
-      take: 5,
+      take: 15,
       include: {
         student: {
           include: {
@@ -761,7 +770,7 @@ export class FeesService {
 
       const monthSum = await this.prisma.fee.aggregate({
         where: {
-          student: { schoolId: currentUser.schoolId },
+          student: { schoolId },
           status: FeeStatus.PAID,
           updatedAt: { gte: d, lt: nextMonth },
         },
@@ -779,6 +788,7 @@ export class FeesService {
         totalCollected: totalCollected._sum.amount || 0,
         outstandingBalance: outstandingBalance._sum.amount || 0,
         todayCollection: todayCollection._sum.amount || 0,
+        overdueCount,
       },
       recentTransactions: (recentTransactions as any[]).map((t) => ({
         id: t.id,

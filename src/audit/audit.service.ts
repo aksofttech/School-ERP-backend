@@ -22,12 +22,9 @@ export class AuditService {
     listAuditLogsDto: ListAuditLogsDto,
     currentUser: { userId: string; role: Role; schoolId?: string },
   ): Promise<PaginatedResult<any>> {
-    if (
-      currentUser.role !== Role.SUPER_ADMIN &&
-      currentUser.role !== Role.SCHOOL_ADMIN
-    ) {
+    if (currentUser.role !== Role.SUPER_ADMIN) {
       throw new ForbiddenException(
-        'Only SUPER_ADMIN and SCHOOL_ADMIN can view audit logs',
+        'Only SUPER_ADMIN can access activity audit logs',
       );
     }
 
@@ -43,35 +40,8 @@ export class AuditService {
 
     const where: any = {};
 
-    // SUPER_ADMIN can view all logs
-    // SCHOOL_ADMIN can only view logs for users in their school
-    if (currentUser.role === Role.SCHOOL_ADMIN) {
-      if (!currentUser.schoolId) {
-        throw new ForbiddenException(
-          'School admin must be associated with a school',
-        );
-      }
-
-      where.user = {
-        schoolId: currentUser.schoolId,
-      };
-    }
-
     // Filter by user
     if (userId) {
-      // Verify user belongs to school if SCHOOL_ADMIN
-      if (currentUser.role === Role.SCHOOL_ADMIN) {
-        const user = await this.prisma.user.findUnique({
-          where: { id: userId },
-        });
-
-        if (!user || user.schoolId !== currentUser.schoolId) {
-          throw new ForbiddenException(
-            'Access denied. You can only view audit logs for users in your school',
-          );
-        }
-      }
-
       where.userId = userId;
     }
 

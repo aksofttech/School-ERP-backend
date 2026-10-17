@@ -12,7 +12,7 @@ export class AuditController {
   constructor(private readonly auditService: AuditService) {}
 
   @Get()
-  @Roles(Role.SUPER_ADMIN, Role.SCHOOL_ADMIN)
+  @Roles(Role.SUPER_ADMIN)
   findAll(
     @Query() listAuditLogsDto: ListAuditLogsDto,
     @CurrentUser() user: any,
@@ -25,7 +25,7 @@ export class AuditController {
   }
 
   @Get('statistics')
-  @Roles(Role.SUPER_ADMIN, Role.SCHOOL_ADMIN)
+  @Roles(Role.SUPER_ADMIN)
   getActivityStatistics(
     @Query('startDate') startDate: string,
     @Query('endDate') endDate: string,
@@ -43,7 +43,7 @@ export class AuditController {
   }
 
   @Get('user/:userId')
-  @Roles(Role.SUPER_ADMIN, Role.SCHOOL_ADMIN)
+  @Roles(Role.SUPER_ADMIN)
   findByUser(
     @Param('userId') userId: string,
     @Query() listAuditLogsDto: ListAuditLogsDto,
@@ -57,7 +57,7 @@ export class AuditController {
   }
 
   @Get('user/:userId/summary')
-  @Roles(Role.SUPER_ADMIN, Role.SCHOOL_ADMIN)
+  @Roles(Role.SUPER_ADMIN)
   getUserActivitySummary(
     @Param('userId') userId: string,
     @CurrentUser() user: any,
@@ -70,7 +70,7 @@ export class AuditController {
   }
 
   @Get(':id')
-  @Roles(Role.SUPER_ADMIN, Role.SCHOOL_ADMIN)
+  @Roles(Role.SUPER_ADMIN)
   findOne(@Param('id') id: string, @CurrentUser() user: any) {
     return this.auditService.findOne(id, {
       userId: user.userId,

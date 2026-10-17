@@ -16,6 +16,17 @@ import { Role, DayOfWeek } from '@prisma/client';
 export class TimetableService {
   constructor(private readonly prisma: PrismaService) {}
 
+  private async getEffectiveSchoolId(currentUser: { userId: string; role: Role; schoolId?: string }): Promise<string> {
+    if (currentUser.schoolId) {
+      return currentUser.schoolId;
+    }
+    const school = await this.prisma.school.findFirst({ select: { id: true } });
+    if (!school) {
+      throw new BadRequestException('No school found in database');
+    }
+    return school.id;
+  }
+
   /**
    * Convert time string (HH:mm) to minutes for comparison
    */
@@ -105,15 +116,14 @@ export class TimetableService {
     createTimetableDto: CreateTimetableDto,
     currentUser: { userId: string; role: Role; schoolId?: string },
   ) {
-    if (currentUser.role !== Role.SCHOOL_ADMIN) {
+    if (
+      currentUser.role !== Role.SCHOOL_ADMIN &&
+      currentUser.role !== Role.SUPER_ADMIN
+    ) {
       throw new ForbiddenException('Only SCHOOL_ADMIN can create timetable');
     }
 
-    if (!currentUser.schoolId) {
-      throw new ForbiddenException(
-        'School admin must be associated with a school',
-      );
-    }
+    const schoolId = await this.getEffectiveSchoolId(currentUser);
 
     const { classId, day, startTime, endTime, subjectId, teacherId, room } =
       createTimetableDto;
@@ -132,7 +142,7 @@ export class TimetableService {
       throw new NotFoundException(`Class with ID ${classId} not found`);
     }
 
-    if (classEntity.schoolId !== currentUser.schoolId) {
+    if (classEntity.schoolId !== schoolId) {
       throw new ForbiddenException(
         'Access denied. You can only create timetable for classes in your school',
       );
@@ -484,6 +494,99 @@ export class TimetableService {
   }
 
   /**
+   * Get weekly timetable for a specific teacher/staff
+   */
+  async findByTeacher(
+    teacherId: string,
+    currentUser: { userId: string; role: Role; schoolId?: string },
+  ) {
+    const schoolId = await this.getEffectiveSchoolId(currentUser);
+
+    const teacher = await this.prisma.teacher.findFirst({
+      where: {
+        OR: [
+          { id: teacherId },
+          { userId: teacherId },
+        ],
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+            phone: true,
+          },
+        },
+      },
+    });
+
+    if (!teacher) {
+      throw new NotFoundException(`Teacher with ID ${teacherId} not found`);
+    }
+
+    const timetables = await this.prisma.timetable.findMany({
+      where: {
+        teacherId: teacher.id,
+      },
+      include: {
+        class: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+        subject: {
+          select: {
+            id: true,
+            name: true,
+            code: true,
+          },
+        },
+        teacher: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+              },
+            },
+          },
+        },
+      },
+      orderBy: [{ day: 'asc' }, { startTime: 'asc' }],
+    });
+
+    const days = [
+      DayOfWeek.MONDAY,
+      DayOfWeek.TUESDAY,
+      DayOfWeek.WEDNESDAY,
+      DayOfWeek.THURSDAY,
+      DayOfWeek.FRIDAY,
+      DayOfWeek.SATURDAY,
+    ];
+
+    const groupedByDay: Record<string, any[]> = {};
+    days.forEach((day) => {
+      groupedByDay[day] = timetables.filter((t) => t.day === day);
+    });
+
+    return {
+      teacher: {
+        id: teacher.id,
+        name: `${teacher.user.firstName} ${teacher.user.lastName}`,
+        email: teacher.user.email,
+        qualification: teacher.qualification,
+      },
+      timetable: groupedByDay,
+      entries: timetables,
+      totalEntries: timetables.length,
+    };
+  }
+
+  /**
    * Get all timetables
    * Read-only for all authenticated users
    */
@@ -513,6 +616,10 @@ export class TimetableService {
 
     if (viewTimetableDto.classId) {
       where.classId = viewTimetableDto.classId;
+    }
+
+    if (viewTimetableDto.teacherId) {
+      where.teacherId = viewTimetableDto.teacherId;
     }
 
     if (viewTimetableDto.day) {
@@ -717,15 +824,14 @@ export class TimetableService {
     updateTimetableDto: UpdateTimetableDto,
     currentUser: { userId: string; role: Role; schoolId?: string },
   ) {
-    if (currentUser.role !== Role.SCHOOL_ADMIN) {
+    if (
+      currentUser.role !== Role.SCHOOL_ADMIN &&
+      currentUser.role !== Role.SUPER_ADMIN
+    ) {
       throw new ForbiddenException('Only SCHOOL_ADMIN can update timetable');
     }
 
-    if (!currentUser.schoolId) {
-      throw new ForbiddenException(
-        'School admin must be associated with a school',
-      );
-    }
+    const schoolId = await this.getEffectiveSchoolId(currentUser);
 
     const timetable = await this.prisma.timetable.findUnique({
       where: { id },
@@ -739,7 +845,7 @@ export class TimetableService {
     }
 
     // Verify timetable belongs to school admin's school
-    if (timetable.class.schoolId !== currentUser.schoolId) {
+    if (timetable.class.schoolId !== schoolId) {
       throw new ForbiddenException(
         'Access denied. You can only update timetable for classes in your school',
       );
@@ -852,15 +958,14 @@ export class TimetableService {
     id: string,
     currentUser: { userId: string; role: Role; schoolId?: string },
   ) {
-    if (currentUser.role !== Role.SCHOOL_ADMIN) {
+    if (
+      currentUser.role !== Role.SCHOOL_ADMIN &&
+      currentUser.role !== Role.SUPER_ADMIN
+    ) {
       throw new ForbiddenException('Only SCHOOL_ADMIN can delete timetable');
     }
 
-    if (!currentUser.schoolId) {
-      throw new ForbiddenException(
-        'School admin must be associated with a school',
-      );
-    }
+    const schoolId = await this.getEffectiveSchoolId(currentUser);
 
     const timetable = await this.prisma.timetable.findUnique({
       where: { id },
@@ -874,7 +979,7 @@ export class TimetableService {
     }
 
     // Verify timetable belongs to school admin's school
-    if (timetable.class.schoolId !== currentUser.schoolId) {
+    if (timetable.class.schoolId !== schoolId) {
       throw new ForbiddenException(
         'Access denied. You can only delete timetable for classes in your school',
       );
