@@ -461,16 +461,26 @@ export class DashboardService {
     const parent = await this.prisma.parent.findUnique({
       where: { userId },
       include: {
+        user: true,
+        school: true,
         students: {
           include: {
             user: true,
             class: true,
-            fees: {
-              where: { status: FeeStatus.PENDING },
-            },
+            section: true,
+            fees: true,
             attendance: {
               orderBy: { date: 'desc' },
               take: 30,
+            },
+            exams: {
+              include: {
+                exam: true,
+              },
+              orderBy: {
+                exam: { date: 'desc' },
+              },
+              take: 10,
             },
           },
         },
@@ -479,50 +489,146 @@ export class DashboardService {
 
     if (!parent) throw new ForbiddenException('Parent profile not found');
 
+    // Get recent homework tasks for all classes of children
+    const classIds = parent.students.map((s) => s.classId);
+    const homeworkTasks = await this.prisma.homework.findMany({
+      where: {
+        classId: { in: classIds },
+      },
+      orderBy: { dueDate: 'asc' },
+      take: 10,
+      include: { class: true, subject: true },
+    });
+
+    // Get school notices
+    const recentNotices = await this.prisma.notice.findMany({
+      where: {
+        schoolId: parent.schoolId,
+        status: NoticeStatus.PUBLISHED,
+        audience: { in: [NoticeAudience.ALL, NoticeAudience.PARENTS] },
+      },
+      orderBy: { publishDate: 'desc' },
+      take: 5,
+    });
+
     const childrenData = parent.students.map((child) => {
-      const pendingFees = child.fees.reduce((sum, fee) => sum + fee.amount, 0);
+      const pendingFees = child.fees
+        .filter((f) => f.status === FeeStatus.PENDING || f.status === FeeStatus.OVERDUE)
+        .reduce((sum, fee) => sum + fee.amount, 0);
+
+      const paidFees = child.fees
+        .filter((f) => f.status === FeeStatus.PAID)
+        .reduce((sum, fee) => sum + fee.amount, 0);
 
       const presentDays = child.attendance.filter(
         (a) => a.status === AttendanceStatus.PRESENT,
+      ).length;
+      const absentDays = child.attendance.filter(
+        (a) => a.status === AttendanceStatus.ABSENT,
       ).length;
       const attendanceRate =
         child.attendance.length > 0
           ? Math.round((presentDays / child.attendance.length) * 100)
           : 0;
 
+      // Child-specific homework
+      const childHomework = homeworkTasks.filter((hw) => hw.classId === child.classId);
+
+      // Child-specific exam results with formatted stats
+      const formattedExamResults = child.exams.map((res) => ({
+        id: res.id,
+        examId: res.examId,
+        examName: res.exam.name,
+        examType: res.exam.type,
+        marks: res.marks,
+        totalMarks: res.exam.totalMarks,
+        passingMarks: res.exam.passingMarks,
+        date: res.exam.date,
+        percentage: res.exam.totalMarks > 0 ? Math.round((res.marks / res.exam.totalMarks) * 100) : 0,
+        isPassed: res.marks >= res.exam.passingMarks,
+      }));
+
+      // Average exam score
+      const examAvg = formattedExamResults.length > 0
+        ? Math.round(formattedExamResults.reduce((sum, e) => sum + e.percentage, 0) / formattedExamResults.length)
+        : 0;
+
       return {
         id: child.id,
         name: `${child.user.firstName} ${child.user.lastName}`,
+        firstName: child.user.firstName,
+        lastName: child.user.lastName,
+        email: child.user.email,
+        phone: child.user.phone,
+        rollNumber: child.rollNumber,
+        admissionNo: child.rollNumber,
         class: child.class.name,
+        classId: child.classId,
+        section: child.section?.name || 'A',
+        gender: child.gender,
+        dob: child.dob,
         pendingFees,
+        paidFees,
+        fees: child.fees,
         attendanceRate,
+        presentDays,
+        absentDays,
+        totalAttendanceRecorded: child.attendance.length,
+        recentAttendance: child.attendance.slice(0, 7).map((att) => ({
+          id: att.id,
+          date: att.date,
+          status: att.status,
+        })),
+        examResults: formattedExamResults,
+        examAverage: examAvg,
+        homeworkTasks: childHomework.map((h) => ({
+          id: h.id,
+          title: h.title,
+          description: h.description,
+          dueDate: h.dueDate,
+          subject: h.subject.name,
+          class: h.class.name,
+        })),
         avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${child.user.firstName}`,
       };
     });
 
-    // Get recent activities for all children
-    const childIds = parent.students.map((s) => s.id);
-    const recentActivities = await this.prisma.homework.findMany({
-      where: {
-        classId: { in: parent.students.map((s) => s.classId) },
-      },
-      orderBy: { createdAt: 'desc' },
-      take: 5,
-      include: { class: true, subject: true },
-    });
-
     return {
+      parent: {
+        id: parent.id,
+        name: `${parent.user.firstName} ${parent.user.lastName}`,
+        email: parent.user.email,
+        phone: parent.user.phone,
+        fatherName: parent.fatherName,
+        motherName: parent.motherName,
+        address: parent.address,
+        schoolName: parent.school?.name || 'Vidya Mandir Senior Secondary School',
+      },
       children: childrenData,
       totalPendingFees: childrenData.reduce(
         (sum, child) => sum + child.pendingFees,
         0,
       ),
-      recentActivities: recentActivities.map((act) => ({
+      totalPaidFees: childrenData.reduce(
+        (sum, child) => sum + child.paidFees,
+        0,
+      ),
+      averageAttendanceRate: childrenData.length > 0
+        ? Math.round(childrenData.reduce((sum, c) => sum + c.attendanceRate, 0) / childrenData.length)
+        : 0,
+      recentActivities: homeworkTasks.map((act) => ({
         id: act.id,
-        type: 'Academics',
+        type: 'Homework Assignment',
         title: act.title,
-        detail: `New homework assigned for ${act.class.name} (${act.subject.name})`,
+        detail: `Assigned for ${act.class.name} (${act.subject.name})`,
+        dueDate: act.dueDate,
         date: act.createdAt,
+      })),
+      recentNotices: recentNotices.map((n) => ({
+        id: n.id,
+        title: n.title,
+        content: n.content,
+        date: n.publishDate,
       })),
     };
   }
